@@ -1,4 +1,5 @@
-ROOT:=../../sdk
+PWD:=$(shell pwd)
+ROOT:=$(PWD)/../sdk
 
 #--------------------------------Output------------------------------
 # OUTTYPE: 0-exe, 1-dll, 2-static

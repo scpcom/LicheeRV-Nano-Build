@@ -1,5 +1,6 @@
-ROOT:=../../sdk
-CONTRIB:=../../3rd
+PWD:=$(shell pwd)
+ROOT:=$(PWD)/../../sdk
+CONTRIB:=$(PWD)/../../3rd
 
 __ENABLE_X264__ ?= 0
 __ENABLE_X262__ ?= 0
