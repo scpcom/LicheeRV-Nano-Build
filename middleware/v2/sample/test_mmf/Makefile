@@ -5,6 +5,14 @@ ifeq ($(PARAM_FILE), )
 endif
 include ../sample.mk
 
+TEST_MMF_VER = $(SDK_VER)
+ifeq ($(SDK_VER), glibc_riscv64)
+TEST_MMF_VER = riscv64
+endif
+ifeq ($(SDK_VER), musl_riscv64)
+TEST_MMF_VER = riscv64
+endif
+
 SDIR = $(PWD)
 SRCS = $(wildcard $(SDIR)/*.c)
 INCS = -I$(MW_INC) -I$(ISP_INC) -I../common/ -I$(KERNEL_INC) -I$(MW_INC)/linux -I$(SDIR)
@@ -52,7 +60,14 @@ endif
 EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
-LIBS += -L$(SDIR)/media_server-1.0.1/libs -L. -lrtsp -lhttp -lflv -lmov -lrtp -lmpeg -lsdk -lavcodec -lavbsf
+MSK_LIBD = media_server-1.0.1/release.linux
+MMF_LIBD = maix_mmf/release.linux
+ifeq ($(TEST_MMF_VER), riscv64)
+MSK_LIBD = media_server-1.0.1/libs
+MMF_LIBD = .
+endif
+
+LIBS += -L$(SDIR)/$(MSK_LIBD) -L$(MMF_LIBD) -lrtsp -lhttp -lflv -lmov -lrtp -lmpeg -lsdk -lavcodec -lavbsf
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -74,11 +89,24 @@ mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/sdk/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/avcodec/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/
+	@mkdir -p $(MSK_LIBD)
+	@cp -p media_server-1.0.1/sdk/libhttp/release.linux/libhttp.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/sdk/libsdk/release.linux/libsdk.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/avcodec/avbsf/release.linux/libavbsf.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/avcodec/avcodec/release.linux/libavcodec.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/libflv/release.linux/libflv.a $(MSK_LIBD)/
+	#@cp -p media_server-1.0.1/libmkv/release.linux/libmkv.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/libmov/release.linux/libmov.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/libmpeg/release.linux/libmpeg.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/librtp/release.linux/librtp.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/librtsp/release.linux/librtsp.a $(MSK_LIBD)/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/
 
 clean_mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/sdk/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/avcodec/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/ clean
 
 $(COMMON_DIR)/%.o: $(COMMON_DIR)/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
