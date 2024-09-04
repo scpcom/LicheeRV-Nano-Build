@@ -17,6 +17,17 @@
 #include <inttypes.h>
 
 #include <fcntl.h>		/* low-level i/o */
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <linux/types.h>
+#include <linux/cvi_common.h>
+#include <linux/cvi_comm_sys.h>
+#include <linux/sys_uapi.h>
+extern int ionFree(struct sys_ion_data *para);
+#ifdef __cplusplus
+}
+#endif
 #include "cvi_buffer.h"
 #include "cvi_ae_comm.h"
 #include "cvi_awb_comm.h"
@@ -320,8 +331,7 @@ static int _free_leak_memory_of_ion(void)
 
 			printf("ion_data.size:%d, ion_data.addr_p:%#x, ion_data.name:%s\r\n", ion_data.size, (int)ion_data.addr_p, ion_data.name);
 
-			extern int ionFree2(struct sys_ion_data2 *para);
-			int res = ionFree2(&ion_data);
+			int res = ionFree((struct sys_ion_data *)&ion_data);
 			if (res) {
 				printf("ionFree2 failed! res:%#x\r\n", res);
 				mmf_deinit();
