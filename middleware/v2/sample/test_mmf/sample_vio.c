@@ -2445,7 +2445,7 @@ static int _test_vi_venc_h265_rtsp(void)
 		{
 			int stream_size = 0;
 			for (int i = 0; i < stream.count; i ++) {
-				printf("[%d] stream.data:%p stream.len:%d\n", i, stream.data[i], stream.data_size[i]);
+				DEBUG("[%d] stream.data:%p stream.len:%d\n", i, stream.data[i], stream.data_size[i]);
 				stream_size += stream.data_size[i];
 			}
 
@@ -2489,6 +2489,8 @@ static int _test_vi_venc_h265_rtsp(void)
 		return 0;
 	}
 _exit:
+	mmf_del_vi_channel(vi_ch);
+	mmf_vi_deinit();
 	if (0 != mmf_deinit()) {
 		printf("mmf deinit\n");
 	}
