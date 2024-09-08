@@ -5,14 +5,6 @@ ifeq ($(PARAM_FILE), )
 endif
 include ../sample.mk
 
-TEST_MMF_VER = $(SDK_VER)
-ifeq ($(SDK_VER), glibc_riscv64)
-TEST_MMF_VER = riscv64
-endif
-ifeq ($(SDK_VER), musl_riscv64)
-TEST_MMF_VER = riscv64
-endif
-
 SDIR = $(PWD)
 SRCS = $(wildcard $(SDIR)/*.c)
 INCS = -I$(MW_INC) -I$(ISP_INC) -I../common/ -I$(KERNEL_INC) -I$(MW_INC)/linux -I$(SDIR)
@@ -62,10 +54,6 @@ EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
 MSK_LIBD = media_server-1.0.1/release.linux
 MMF_LIBD = maix_mmf/release.linux
-ifeq ($(TEST_MMF_VER), riscv64)
-MSK_LIBD = media_server-1.0.1/libs
-MMF_LIBD = .
-endif
 
 LIBS += -L$(SDIR)/$(MSK_LIBD) -L$(MMF_LIBD) -lrtsp -lhttp -lflv -lmov -lrtp -lmpeg -lsdk -lavcodec -lavbsf
 
