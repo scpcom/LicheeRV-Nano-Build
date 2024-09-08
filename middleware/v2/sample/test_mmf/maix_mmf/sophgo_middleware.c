@@ -574,9 +574,9 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 	memcpy(&stVbConf, &priv.vb_conf, sizeof(VB_CONFIG_S));
 	// stVbConf.u32MaxPoolCnt		= 3;
 
-	u32BlkSize = COMMON_GetPicBufferSize(stSize.u32Width, stSize.u32Height, PIXEL_FORMAT_YUYV,
+	u32BlkSize = COMMON_GetPicBufferSize(stSize.u32Width, stSize.u32Height, MMF_VI_PIXEL_FORMAT,
 		DATA_BITWIDTH_8, enCompressMode, DEFAULT_ALIGN);
-	u32BlkRotSize = COMMON_GetPicBufferSize(stSize.u32Height, stSize.u32Width, PIXEL_FORMAT_YUYV,
+	u32BlkRotSize = COMMON_GetPicBufferSize(stSize.u32Height, stSize.u32Width, MMF_VI_PIXEL_FORMAT,
 		DATA_BITWIDTH_8, enCompressMode, DEFAULT_ALIGN);
 	u32BlkSize = MAX(u32BlkSize, u32BlkRotSize);
 
@@ -1180,7 +1180,7 @@ int mmf_vi_init(void)
 	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	s32Ret = _mmf_vpss_init_new(0, priv.vi_size.u32Width, priv.vi_size.u32Height, PIXEL_FORMAT_UYVY); 
+	s32Ret = _mmf_vpss_init_new(0, priv.vi_size.u32Width, priv.vi_size.u32Height, MMF_VI_PIXEL_FORMAT);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 	}
