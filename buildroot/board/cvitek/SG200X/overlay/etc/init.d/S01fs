@@ -8,35 +8,5 @@ then
 	mount -t vfat /dev/mmcblk0p1 /boot
 	mount -t configfs configfs /sys/kernel/config
 	mount -t debugfs debugfs /sys/kernel/debug
-
-	disk=
-	if [ -e /boot/usb.disk0 ]
-	then
-		disk=$(cat /boot/usb.disk0)
-	fi
-	if [ "${disk}" = "/dev/mmcblk0p3" ]
-	then
-		# use all sdcard free space for data
-		parted -s /dev/mmcblk0 "resizepart 2 -0"
-		echo "yes
-		25%
-		" | parted ---pretend-input-tty /dev/mmcblk0 "resizepart 2 25%"
-		# resize data filesystem
-		(resize2fs /dev/mmcblk0p2) &
-
-		if [ ! -e /etc/kvm.disk0 ]
-		then
-			touch /etc/kvm.disk0
-			# use all sdcard free space for data
-			parted -s /dev/mmcblk0 "mkpart primary 25% 100%"
-			sleep 1
-			# resize data filesystem
-			(mkfs.exfat /dev/mmcblk0p3) &
-			sleep 1
-		fi
-		mkdir -p /data
-		mount /dev/mmcblk0p3 /data
-	fi
-
 	echo "OK"
 fi
