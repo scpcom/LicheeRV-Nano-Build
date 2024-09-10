@@ -78,23 +78,11 @@ typedef uint64_t VB_BLK;
 		(var) = (tvar))
 #endif
 
-#ifdef WANT_VI_MOTION_LEVEL_CALC
-#define MO_TBL_SIZE 2048
-#else
 #define MO_TBL_SIZE 256
-#endif
 
 struct mlv_i_s {
 	u8 mlv_i_level;
 	u8 mlv_i_table[MO_TBL_SIZE];
-};
-
-struct mlv_wrap_i_s {
-	struct mlv_i_s mlv_i;
-#ifdef WANT_VI_MOTION_LEVEL_CALC
-	u32 dci_lv;
-	u8 raw_num;
-#endif
 };
 
 struct mod_ctx_s {
@@ -127,7 +115,6 @@ struct cvi_buffer {
 
 	uint8_t  motion_lv;
 	uint8_t  motion_table[MO_TBL_SIZE];
-	uint32_t dci_lv;
 
 	uint32_t flags; //bit 0: drop frame
 	uint32_t sequence;
