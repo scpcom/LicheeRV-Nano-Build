@@ -1,4 +1,5 @@
-ROOT:=..
+PWD:=$(shell pwd)
+ROOT:=$(PWD)/..
 
 #--------------------------------Output------------------------------
 # OUTTYPE: 0-exe, 1-dll, 2-static

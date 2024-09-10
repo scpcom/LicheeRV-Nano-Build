@@ -1,6 +1,8 @@
 #ifndef __MAIX_MMF_HPP__
 #define __MAIX_MMF_HPP__
 
+#define MMF_VI_PIXEL_FORMAT	PIXEL_FORMAT_NV21 // PIXEL_FORMAT_NV21, PIXEL_FORMAT_YUYV or PIXEL_FORMAT_UYVY
+
 typedef struct {
     uint8_t *data[8];
     int data_size[8];

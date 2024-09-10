@@ -52,7 +52,10 @@ endif
 EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
-LIBS += -L$(SDIR)/media_server-1.0.1/libs -L. -lrtsp -lhttp -lflv -lmov -lrtp -lmpeg -lsdk -lavcodec -lavbsf
+MSK_LIBD = media_server-1.0.1/release.linux
+MMF_LIBD = maix_mmf/release.linux
+
+LIBS += -L$(SDIR)/$(MSK_LIBD) -L$(MMF_LIBD) -lrtsp -lhttp -lflv -lmov -lrtp -lmpeg -lsdk -lavcodec -lavbsf
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -70,6 +73,29 @@ endif
 .PHONY : clean all
 all: $(TARGET)
 
+mmflibs:
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/sdk/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/avcodec/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/
+	@mkdir -p $(MSK_LIBD)
+	@cp -p media_server-1.0.1/sdk/libhttp/release.linux/libhttp.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/sdk/libsdk/release.linux/libsdk.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/avcodec/avbsf/release.linux/libavbsf.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/avcodec/avcodec/release.linux/libavcodec.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/libflv/release.linux/libflv.a $(MSK_LIBD)/
+	#@cp -p media_server-1.0.1/libmkv/release.linux/libmkv.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/libmov/release.linux/libmov.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/libmpeg/release.linux/libmpeg.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/librtp/release.linux/librtp.a $(MSK_LIBD)/
+	@cp -p media_server-1.0.1/librtsp/release.linux/librtsp.a $(MSK_LIBD)/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/
+
+clean_mmflibs:
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/sdk/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/avcodec/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/ clean
+
 $(COMMON_DIR)/%.o: $(COMMON_DIR)/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
 	@echo [$(notdir $(CC))] $(notdir $@)
@@ -78,11 +104,11 @@ $(SDIR)/%.o: $(SDIR)/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
 	@echo [$(notdir $(CC))] $(notdir $@)
 
-$(TARGET): $(COMM_OBJ) $(OBJS) $(ISP_OBJ) $(MW_LIB)/libvpu.a $(MW_LIB)/libsys.a
+$(TARGET): mmflibs $(COMM_OBJ) $(OBJS) $(ISP_OBJ) $(MW_LIB)/libvpu.a $(MW_LIB)/libsys.a
 	@$(CXX) -o $@ -Wl,--start-group $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaix_mmf $(ELFFLAGS) $(EXTRA_LDFLAGS)
 	@echo -e $(BLUE)[LINK]$(END)[$(notdir $(CXX))] $(notdir $@)
 
-clean:
+clean: clean_mmflibs
 	@rm -f $(OBJS) $(DEPS) $(COMM_OBJ) $(COMM_DEPS) $(TARGET)
 
 -include $(DEPS)

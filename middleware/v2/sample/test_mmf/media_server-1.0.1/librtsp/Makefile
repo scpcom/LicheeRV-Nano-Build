@@ -1,4 +1,5 @@
-ROOT:=../../sdk
+PWD:=$(shell pwd)
+ROOT:=$(PWD)/../sdk
 
 #--------------------------------Output------------------------------
 # OUTTYPE: 0-exe, 1-dll, 2-static
@@ -19,8 +20,8 @@ INCLUDES = . \
 					../libflv/include \
 					../libmov/include \
 					../libmkv/include \
-					../../avcodec/avbsf/include \
-					../../avcodec/avcodec/include
+					$(PWD)/../avcodec/avbsf/include \
+					$(PWD)/../avcodec/avcodec/include
 
 #-------------------------------Source-------------------------------
 #
