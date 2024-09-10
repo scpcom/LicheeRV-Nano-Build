@@ -1354,6 +1354,12 @@ static int _test_venc_jpg(void)
 		return -1;
 	}
 
+	int enc_ch = 0;
+	if (0 != mmf_enc_jpg_init(enc_ch, img_w, img_h, img_fmt, 80)) {
+		DEBUG("mmf_enc_jpg_init failed!\r\n");
+		return -1;
+	}
+
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
 	if (0 != mmf_add_vo_channel(layer, vo_ch, show_w, show_h, img_fmt, fit)) {
@@ -1363,18 +1369,38 @@ static int _test_venc_jpg(void)
 		return -1;
 	}
 
-	int enc_ch = 0;
+	int loop_count = 0;
+	int fail_count = 0;
 	uint64_t start = _get_time_us();
 #if 1
 	while (!exit_flag) {
 		// pop last push frame
 		uint8_t *data;
 		int data_size;
+		uint8_t *vi_data;
+		int vi_data_size, width, height, format;
+		if (0 != mmf_vi_frame_pop(vi_ch, &vi_data, &vi_data_size, &width, &height, &format)) {
+			fail_count++;
+			if (fail_count > 30)
+				break;
+			continue;
+		}
+		printf("Pop..width:%d height:%d data_size:%d format:%d\r\n", width, height, data_size, format);
+		start = _get_time_us();
+		if (0 != mmf_enc_jpg_push(enc_ch, vi_data, width, height, format)) {
+		        printf("mmf_enc_jpg_push failed!\r\n");
+		}
+		DEBUG(">>>>>>>>>>>>>>>>[%s][%d] use %ld us\r\n", __func__, __LINE__, _get_time_us() - start);
 		start = _get_time_us();
 		if (!mmf_enc_jpg_pop(enc_ch, &data, &data_size)) {
 			DEBUG(">>>>>>>>>>>>>>>>[%s][%d] use %ld us\r\n", __func__, __LINE__, _get_time_us() - start);
 
-			// save_buff_to_file("venc_stream.jpg", data, data_size);
+			if ((loop_count < 60) && data_size) {
+				char fn[32];
+				sprintf(fn, "venc_stream%d.jpg", loop_count);
+				save_buff_to_file(fn, data, data_size);
+				loop_count++;
+			}
 
 			start = _get_time_us();
 			if (0 != mmf_enc_jpg_free(enc_ch)) {
@@ -1385,11 +1411,10 @@ static int _test_venc_jpg(void)
 		}
 
 		start = _get_time_us();
-		if (0 != mmf_enc_jpg_push(enc_ch, filebuf, img_w, img_h, img_fmt)) {
-			DEBUG("mmf_enc_jpg_push failed!\r\n");
-		}
-		DEBUG(">>>>>>>>>>>>>>>>[%s][%d] use %ld us\r\n", __func__, __LINE__, _get_time_us() - start);
-		// break;
+		mmf_vi_frame_free(vi_ch);
+		DEBUG("use %ld us\r\n", _get_time_us() - start);
+		if (loop_count >= 60)
+			break;
 	}
 #elif 1
 	{
@@ -1472,7 +1497,13 @@ static int _test_venc_jpg(void)
 #endif
 
 	mmf_del_vo_channel(layer, vo_ch);
+
+	if (0 != mmf_enc_jpg_deinit(enc_ch)) {
+		DEBUG("mmf_enc_jpg_deinit failed!\r\n");
+	}
+
 	mmf_del_vi_channel(vi_ch);
+	mmf_vi_deinit();
 	mmf_deinit();
 	return 0;
 }
