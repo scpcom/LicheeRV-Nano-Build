@@ -1772,6 +1772,11 @@ error_and_deinit_vpss:
 	return -1;
 }
 
+int mmf_add_vo_channel_with_fit(int layer, int ch, int width, int height, int format, int fit)
+{
+	return mmf_add_vo_channel(layer, ch, width, height, format, fit);
+}
+
 int mmf_del_vo_channel(int layer, int ch) {
 	if (layer == MMF_VO_VIDEO_LAYER) {
 		if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
