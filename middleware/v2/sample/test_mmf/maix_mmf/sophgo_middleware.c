@@ -1043,6 +1043,12 @@ int mmf_deinit(void) {
     return 0;
 }
 
+int mmf_try_deinit(bool force)
+{
+	UNUSED(force);
+	return mmf_deinit();
+}
+
 int mmf_get_vi_unused_channel(void) {
 	return _vi_get_unused_ch();
 }
