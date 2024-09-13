@@ -3257,7 +3257,7 @@ int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 	return -1;
 }
 
-int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg)
+int mmf_add_vdec_channel(int ch, int format_out, mmf_vdec_cfg_t *cfg)
 {
 	return -1;
 }
@@ -3844,14 +3844,21 @@ int mmf_add_vdec_channel0(uint32_t param, ...)
 {
 	int method = MMF_FUNC_GET_PARAM_METHOD(param);
 	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	int format_out = 0;
+	int pool_num = 0;
 	va_list ap;
 
 	if ((method != 0) || (n_args < 2))
 		return -1;
 	va_start(ap, param);
 	int ch = va_arg(ap, int);
+	if (n_args > 2)
+		format_out = va_arg(ap, int);
+	if (n_args > 3)
+		pool_num = va_arg(ap, int);
 	void *cfg = va_arg(ap, void*);
 	va_end(ap);
 
-	return mmf_add_vdec_channel(ch, (mmf_vdec_cfg_t *)cfg);
+	UNUSED(pool_num);
+	return mmf_add_vdec_channel(ch, format_out, (mmf_vdec_cfg_t *)cfg);
 }
