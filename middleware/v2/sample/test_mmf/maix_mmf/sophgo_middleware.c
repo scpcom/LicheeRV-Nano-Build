@@ -44,6 +44,8 @@
 #endif
 typedef struct {
 	int mmf_used_cnt;
+	PIXEL_FORMAT_E vi_format;
+	PIXEL_FORMAT_E vi_vpss_format;
 	int vo_rotate;	// 90, 180, 270
 	bool vi_is_inited;
 	bool vi_chn_is_inited[MMF_VI_MAX_CHN];
@@ -574,9 +576,9 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 	memcpy(&stVbConf, &priv.vb_conf, sizeof(VB_CONFIG_S));
 	// stVbConf.u32MaxPoolCnt		= 3;
 
-	u32BlkSize = COMMON_GetPicBufferSize(stSize.u32Width, stSize.u32Height, MMF_VI_PIXEL_FORMAT,
+	u32BlkSize = COMMON_GetPicBufferSize(stSize.u32Width, stSize.u32Height, priv.vi_format,
 		DATA_BITWIDTH_8, enCompressMode, DEFAULT_ALIGN);
-	u32BlkRotSize = COMMON_GetPicBufferSize(stSize.u32Height, stSize.u32Width, MMF_VI_PIXEL_FORMAT,
+	u32BlkRotSize = COMMON_GetPicBufferSize(stSize.u32Height, stSize.u32Width, priv.vi_format,
 		DATA_BITWIDTH_8, enCompressMode, DEFAULT_ALIGN);
 	u32BlkSize = MAX(u32BlkSize, u32BlkRotSize);
 
@@ -901,6 +903,66 @@ static int _vi_get_unused_ch() {
 	return -1;
 }
 
+char* mmf_get_sensor_name(void)
+{
+	static char name[30];
+
+	switch (priv.sensor_type) {
+	    case GCORE_GC4653_MIPI_4M_30FPS_10BIT:
+	    case GCORE_GC4653_MIPI_720P_60FPS_10BIT:
+	        snprintf(name, sizeof(name), "gcore_gc4653");
+	        return name;
+	    case SMS_SC035GS_MIPI_480P_120FPS_12BIT:
+	        snprintf(name, sizeof(name), "sms_sc035gs");
+	        return name;
+	    case LONTIUM_LT6911_2M_60FPS_8BIT:
+		snprintf(name, sizeof(name), "lt6911");
+	        return name;
+	    case OV_OS04A10_MIPI_4M_1440P_30FPS_12BIT:
+	        snprintf(name, sizeof(name), "ov_os04a10");
+	        return name;
+	    case GCORE_OV2685_MIPI_1600x1200_30FPS_10BIT:
+	        snprintf(name, sizeof(name), "ov_ov2685");
+	        return name;
+	    default:
+	        break;
+	}
+
+	snprintf(name, sizeof(name), "gcore_gc4653");
+	return name;
+}
+
+int mmf_vi_format_init(void)
+{
+	PIXEL_FORMAT_E vi_format = MMF_VI_PIXEL_FORMAT;
+	PIXEL_FORMAT_E vi_vpss_format = MMF_VI_PIXEL_FORMAT;
+
+	// config vi param
+	char *sensor_name = mmf_get_sensor_name();
+
+	if (!strcmp(sensor_name, "sms_sc035gs")) {
+		vi_format = PIXEL_FORMAT_NV21;
+		vi_vpss_format = PIXEL_FORMAT_YUV_400;
+	} else if (!strcmp(sensor_name, "ov_ov2685")) {
+		vi_format = PIXEL_FORMAT_NV21;
+		vi_vpss_format = PIXEL_FORMAT_NV21;
+	} else if (!strcmp(sensor_name, "lt6911")) {
+		vi_format = PIXEL_FORMAT_UYVY;
+		vi_vpss_format = PIXEL_FORMAT_UYVY;
+	} else if (!strcmp(sensor_name, "ov_os04a10")) {
+		vi_format = PIXEL_FORMAT_NV21;
+		vi_vpss_format = PIXEL_FORMAT_NV21;
+	} else { // default is gcore_gc4653
+		vi_format = PIXEL_FORMAT_NV21;
+		vi_vpss_format = PIXEL_FORMAT_NV21;
+	}
+
+	priv.vi_format = vi_format;
+	priv.vi_vpss_format = vi_vpss_format;
+
+	return 0;
+}
+
 int mmf_init(void)
 {
     if (priv.mmf_used_cnt) {
@@ -917,6 +979,8 @@ int mmf_init(void)
 	} else {
 		printf("try release sys ok\n");
 	}
+
+    mmf_vi_format_init();
 
     if (_mmf_init() != CVI_SUCCESS) {
         printf("maix multi-media init failed\n");
@@ -1180,7 +1244,7 @@ int mmf_vi_init(void)
 	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	s32Ret = _mmf_vpss_init_new(0, priv.vi_size.u32Width, priv.vi_size.u32Height, MMF_VI_PIXEL_FORMAT);
+	s32Ret = _mmf_vpss_init_new(0, priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 	}
@@ -3328,6 +3392,7 @@ int mmf_get_sensor_id(void)
 {
 	switch (priv.sensor_type) {
 	case GCORE_GC4653_MIPI_4M_30FPS_10BIT: return 0x4653;
+	case LONTIUM_LT6911_2M_60FPS_8BIT: return 0x6911;
 	default: return -1;
 	}
 
