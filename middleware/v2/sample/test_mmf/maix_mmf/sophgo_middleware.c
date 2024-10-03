@@ -1272,7 +1272,7 @@ int mmf_vi_deinit(void)
 	return s32Ret;
 }
 
-int mmf_add_vi_channel(int ch, int width, int height, int format) {
+static int _mmf_add_vi_channel(int ch, int width, int height, int format, int fps, int depth, bool mirror, bool flip, int fit) {
 	if (!priv.mmf_used_cnt || !priv.vi_is_inited) {
 		printf("%s: maix multi-media or vi not inited\n", __func__);
 		return -1;
@@ -1336,20 +1336,16 @@ _need_deinit_vpss:
 	return -1;
 #else
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	int fps = 30;
-	int depth = 2;
 	int width_out = ALIGN(width, DEFAULT_ALIGN);
 	int height_out = height;
 	PIXEL_FORMAT_E format_out = (PIXEL_FORMAT_E)format;
-	bool mirror = !g_priv.vi_hmirror[ch];
-	bool flip = !g_priv.vi_vflip[ch];
 	s32Ret = _mmf_vpss_chn_deinit(0, ch);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
-	s32Ret = _mmf_vpss_chn_init(0, ch, width_out, height_out, format_out, fps, depth, mirror, flip, 2);
+	s32Ret = _mmf_vpss_chn_init(0, ch, width_out, height_out, format_out, fps, depth, mirror, flip, fit);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
@@ -1368,6 +1364,15 @@ _need_deinit_vpss_chn:
 	_mmf_vpss_chn_deinit(0, ch);
 	return -1;
 #endif
+}
+
+int mmf_add_vi_channel(int ch, int width, int height, int format) {
+	return  _mmf_add_vi_channel(ch, width, height, format, 30, 2, !g_priv.vi_hmirror[ch], !g_priv.vi_vflip[ch], 2);
+}
+
+int mmf_add_vi_channel_v2(int ch, int width, int height, int format, int fps, int depth, int mirror, int vflip, int fit, int pool_num) {
+	UNUSED(pool_num);
+	return  _mmf_add_vi_channel(ch, width, height, format, fps, depth, mirror, vflip, fit);
 }
 
 int mmf_del_vi_channel(int ch) {

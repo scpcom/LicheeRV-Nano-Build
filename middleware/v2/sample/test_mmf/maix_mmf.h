@@ -91,5 +91,8 @@ void mmf_set_luma(int ch, uint32_t val);
 
 // sensor info
 int mmf_get_sensor_id(void);
+char* mmf_get_sensor_name(void);
+
+int mmf_add_vi_channel_v2(int ch, int width, int height, int format, int fps, int depth, int mirror, int vflip, int fit, int pool_num);
 
 #endif // __SOPHGO_MIDDLEWARE_HPP__

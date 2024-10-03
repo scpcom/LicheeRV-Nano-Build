@@ -2418,9 +2418,13 @@ static int _test_vi_venc_h265_rtsp(void)
 		return 0;
 	}
 
-	int img_w = 2560, img_h = 1440, fit = 0, img_fmt = PIXEL_FORMAT_NV21;
+	int img_w = 2560, img_h = 1440, img_fps = 30, fit = 0, img_fmt = PIXEL_FORMAT_NV21;
 	(void)fit;
 	int ch = 0;
+	char *sensor_name = mmf_get_sensor_name();
+	if (!strcmp(sensor_name, "lt6911")) {
+		img_w = 1280; img_h = 720; //img_fps = 60;
+	}
 	if (mmf_enc_h265_init(ch, img_w, img_h)) {
 		printf("mmf_enc_h265_init failed\n");
 		return -1;
@@ -2433,7 +2437,7 @@ static int _test_vi_venc_h265_rtsp(void)
 	}
 
 	int vi_ch = mmf_get_vi_unused_channel();
-	if (0 != mmf_add_vi_channel(vi_ch, img_w, img_h, img_fmt)) {
+	if (0 != mmf_add_vi_channel_v2(vi_ch, img_w, img_h, img_fmt, img_fps, 2, !true, !true, 2, 3)) {
 		DEBUG("mmf_add_vi_channel failed!\r\n");
 		mmf_deinit();
 		return -1;
