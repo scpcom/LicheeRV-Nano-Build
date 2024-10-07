@@ -602,50 +602,10 @@ static uint8_t *_prepare_image(int width, int height, int format)
 	}
 	case PIXEL_FORMAT_NV21:
 	{
-		uint8_t *rgb_data = (uint8_t *)malloc(width * height * 3);
-		int x_oft = 0;
-		int remain_width = width;
-		int segment_width = width / 6;
-		int idx = 0;
-		while (remain_width > 0) {
-			int seg_w = (remain_width > segment_width) ? segment_width : remain_width;
-			uint8_t r,g,b;
-			switch (idx) {
-			case 0: r = 0xff, g = 0x00, b = 0x00; break;
-			case 1: r = 0x00, g = 0xff, b = 0x00; break;
-			case 2: r = 0x00, g = 0x00, b = 0xff; break;
-			case 3: r = 0xff, g = 0xff, b = 0x00; break;
-			case 4: r = 0xff, g = 0x00, b = 0xff; break;
-			case 5: r = 0x00, g = 0xff, b = 0xff; break;
-			default: r = 0x00, g = 0x00, b = 0x00; break;
-			}
-			idx ++;
-			for (int i = 0; i < height; i ++) {
-				for (int j = 0; j < seg_w; j ++) {
-					rgb_data[(i * width + x_oft + j) * 3 + 0] = r;
-					rgb_data[(i * width + x_oft + j) * 3 + 1] = g;
-					rgb_data[(i * width + x_oft + j) * 3 + 2] = b;
-				}
-			}
-			x_oft += seg_w;
-			remain_width -= seg_w;
-		}
-
-		for (int i = 0; i < height; i ++) {
-			uint8_t *buff = &rgb_data[(i * width + i) * 3];
-			buff[0] = 0xff;
-			buff[1] = 0xff;
-			buff[2] = 0xff;
-		}
-		for (int i = 0; i < height; i ++) {
-			uint8_t *buff = &rgb_data[(i * width + i + width - height) * 3];
-			buff[0] = 0xff;
-			buff[1] = 0xff;
-			buff[2] = 0xff;
-		}
-
+		uint8_t *rgb_data = _prepare_image(width, height, PIXEL_FORMAT_RGB_888);
 		uint8_t *nv21 = (uint8_t *)malloc(width * height * 3 / 2);
 		_rgb888_to_nv21(rgb_data, width, height, nv21);
+		free(rgb_data);
 		return nv21;
 	}
 	break;
@@ -2423,12 +2383,14 @@ static int _test_vi_venc_h265_rtsp(void)
 	int ch = 0;
 	char *sensor_name = mmf_get_sensor_name();
 	if (!strcmp(sensor_name, "lt6911")) {
-		img_w = 1280; img_h = 720; //img_fps = 60;
+		img_w = 1280; img_h = 720; img_fps = 60;
 	}
 	if (mmf_enc_h265_init(ch, img_w, img_h)) {
 		printf("mmf_enc_h265_init failed\n");
 		return -1;
 	}
+
+	uint8_t *filebuf = _prepare_image(img_w, img_h, img_fmt);
 
 	if (0 != mmf_vi_init()) {
 		DEBUG("mmf_vi_init failed!\r\n");
@@ -2447,14 +2409,32 @@ static int _test_vi_venc_h265_rtsp(void)
 
 	uint64_t start = _get_time_us();
 	uint64_t last_loop_us = start;
+	uint64_t timestamp = 0;
+	int last_vi_pop = -1;
+	exit_flag = 0;
 	while (!exit_flag) {
 		void *data;
 		int data_size, width, height, format;
 
-		start = _get_time_us();
-		if (mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format)) {
-			continue;
+		if (!last_vi_pop) {
+			start = _get_time_us();
+			mmf_vi_frame_free(vi_ch);
+			DEBUG("use %ld us\r\n", _get_time_us() - start);
 		}
+
+		start = _get_time_us();
+		int vi_ret = mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format);
+		if (vi_ret != last_vi_pop) {
+			uint64_t vi_stamp = timestamp;
+			vi_stamp += (_get_time_us() - last_loop_us) / 1000;
+			printf("[%.6ld.%.3ld] %s\n", vi_stamp / 1000, vi_stamp % 1000,
+				vi_ret ? "no input signal" : "got input signal");
+			mmf_enc_h265_deinit(ch);
+			mmf_enc_h265_init(ch, img_w, img_h);
+			last_vi_pop = vi_ret;
+		}
+		if (vi_ret)
+			data = filebuf;
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
@@ -2462,10 +2442,6 @@ static int _test_vi_venc_h265_rtsp(void)
 			printf("mmf_enc_h265_push failed\n");
 			goto _exit;
 		}
-		DEBUG("use %ld us\r\n", _get_time_us() - start);
-
-		start = _get_time_us();
-		mmf_vi_frame_free(vi_ch);
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
@@ -2511,6 +2487,7 @@ static int _test_vi_venc_h265_rtsp(void)
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		DEBUG("use %ld us\r\n", _get_time_us() - last_loop_us);
+		timestamp += (_get_time_us() - last_loop_us) / 1000;
 		last_loop_us = _get_time_us();
 	}
 
@@ -2529,6 +2506,7 @@ _exit:
 	if (0 != mmf_deinit()) {
 		printf("mmf deinit\n");
 	}
+	free(filebuf);
 	return 0;
 }
 
