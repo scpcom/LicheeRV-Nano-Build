@@ -1446,7 +1446,7 @@ int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int
 
 	int ret = -1;
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
-	if (CVI_VPSS_GetChnFrame(0, ch, frame, 3000) == 0) {
+	if (CVI_VPSS_GetChnFrame(0, ch, frame, 100) == 0) {
         int image_size = frame->stVFrame.u32Length[0]
                         + frame->stVFrame.u32Length[1]
 				        + frame->stVFrame.u32Length[2];
