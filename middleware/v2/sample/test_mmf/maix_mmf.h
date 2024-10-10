@@ -19,6 +19,7 @@ bool mmf_is_init(void);
 int mmf_get_vi_unused_channel(void);
 int mmf_vi_init(void);
 int mmf_vi_deinit(void);
+int mmf_vi_get_max_size(int *width, int *height);
 int mmf_add_vi_channel(int ch, int width, int height, int format);
 int mmf_del_vi_channel(int ch);
 int mmf_del_vi_channel_all(void);

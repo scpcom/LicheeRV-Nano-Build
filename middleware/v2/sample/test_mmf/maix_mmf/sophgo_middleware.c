@@ -3604,3 +3604,16 @@ void mmf_set_luma(int ch, uint32_t val)
 	stCscAttr.Luma = val;
 	CVI_ISP_SetCSCAttr(ch, &stCscAttr);
 }
+
+int mmf_vi_get_max_size(int *width, int *height)
+{
+	if (!width)
+		return -1;
+	if (!height)
+		return -1;
+
+	*width = priv.vi_size.u32Width;
+	*height = priv.vi_size.u32Height;
+
+	return 0;
+}
