@@ -1,6 +1,10 @@
 #ifndef __MAIX_MMF_HPP__
 #define __MAIX_MMF_HPP__
 
+#define MMF_FUNC_SET_PARAM(method, num) ((uint32_t)((((uint32_t)method) << 24) | (num & 0xff)))
+#define MMF_FUNC_GET_PARAM_METHOD(x)    ((x >> 24) & 0xffffff)
+#define MMF_FUNC_GET_PARAM_NUM(x)       ((x & 0xff))
+
 #define MMF_VI_PIXEL_FORMAT	PIXEL_FORMAT_NV21 // PIXEL_FORMAT_NV21, PIXEL_FORMAT_YUYV or PIXEL_FORMAT_UYVY
 
 typedef struct {
@@ -38,6 +42,7 @@ void mmf_vi_frame_free(int ch);
 // manage vo channels
 int mmf_get_vo_unused_channel(int layer);
 int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int fit);
+int mmf_add_vo_channel_with_fit(int layer, int ch, int width, int height, int format, int fit);
 int mmf_del_vo_channel(int layer, int ch);
 int mmf_del_vo_channel_all(int layer);
 bool mmf_vo_channel_is_open(int layer, int ch);
@@ -102,6 +107,35 @@ int mmf_get_luma(int ch, uint32_t *value);
 int mmf_get_sensor_id(void);
 char* mmf_get_sensor_name(void);
 
-int mmf_add_vi_channel_v2(int ch, int width, int height, int format, int fps, int depth, int mirror, int vflip, int fit, int pool_num);
+int mmf_init0(uint32_t param, ...);
+int mmf_deinit0(uint32_t param, ...);
+int mmf_vi_init0(uint32_t param, ...);
+int mmf_add_vi_channel0(uint32_t param, ...);
+int mmf_add_vo_channel0(uint32_t param, ...);
+int mmf_add_region_channel0(uint32_t param, ...);
+
+static inline int mmf_init_v2(int reload_kmod) {
+    return mmf_init0(MMF_FUNC_SET_PARAM(0, 1), reload_kmod);
+}
+
+static inline int mmf_deinit_v2(int force) {
+    return mmf_deinit0(MMF_FUNC_SET_PARAM(0, 1), force);
+}
+
+static inline int mmf_vi_init_v2(int width, int height, int vi_format, int vpss_format, int fps, int pool_num, SAMPLE_VI_CONFIG_S *vi_cfg) {
+    return mmf_vi_init0(MMF_FUNC_SET_PARAM(0, 8), width, height, vi_format, vpss_format, fps, pool_num, vi_cfg);
+}
+
+static inline int mmf_add_vi_channel_v2(int ch, int width, int height, int format, int fps, int depth, int mirror, int vflip, int fit, int pool_num) {
+    return mmf_add_vi_channel0(MMF_FUNC_SET_PARAM(0, 10), ch, width, height, format, fps, depth, mirror, vflip, fit, pool_num);
+}
+
+static inline int mmf_add_vo_channel_v2(int layer, int ch, int width, int height, int format_in, int format_out, int fps, int depth, int mirror, int vflip, int fit, int rotate, int pool_num_in, int pool_num_out) {
+    return mmf_add_vo_channel0(MMF_FUNC_SET_PARAM(0, 14), layer, ch, width, height, format_in, format_out, fps, depth, mirror, vflip, fit, rotate, pool_num_in, pool_num_out);
+}
+
+static inline int mmf_add_region_channel_v2(int ch, int type, int mod_id, int dev_id, int chn_id, int x, int y, int width, int height, int format) {
+    return mmf_add_region_channel0(MMF_FUNC_SET_PARAM(0, 10), ch, type, mod_id, dev_id, chn_id, x, y, width, height, format);
+}
 
 #endif // __SOPHGO_MIDDLEWARE_HPP__
