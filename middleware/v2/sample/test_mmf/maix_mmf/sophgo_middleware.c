@@ -1899,7 +1899,7 @@ bool mmf_vo_channel_is_open(int layer, int ch) {
 }
 
 // flush vo
-int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
+int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	UNUSED(len);
 	UNUSED(layer);
@@ -2226,6 +2226,9 @@ int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int hei
 	return CVI_SUCCESS;
 }
 
+int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
+	return mmf_vo_frame_push_with_fit(layer, ch, data, len, width, height, format, fit);
+}
 
 static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYPE_E enType, MMF_CHN_S *pstChn)
 {
@@ -2769,7 +2772,7 @@ int mmf_enc_jpg_deinit(int ch)
 	return s32Ret;
 }
 
-int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
+int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
 	UNUSED(ch);
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -2780,7 +2783,7 @@ int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 	SIZE_S stSize = {(CVI_U32)w, (CVI_U32)h};
 	if (priv.enc_jpg_frame == NULL || priv.enc_jpg_frame_w != w || priv.enc_jpg_frame_h != h || priv.enc_jpg_frame_fmt != format) {
 		if (!priv.enc_jpg_is_init)
-			mmf_enc_jpg_init(ch, w, h, format, 80);
+			mmf_enc_jpg_init(ch, w, h, format, quality);
 
 		priv.enc_jpg_frame_w = w;
 		priv.enc_jpg_frame_h = h;
@@ -2832,6 +2835,11 @@ int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 	priv.enc_jpg_running = 1;
 
 	return s32Ret;
+}
+
+int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
+{
+	return mmf_enc_jpg_push_with_quality(ch, data, w,h, format, 80);
 }
 
 int mmf_enc_jpg_pop(int ch, uint8_t **data, int *size)
@@ -3415,6 +3423,19 @@ int mmf_get_sensor_id(void)
 	return -1;
 }
 
+void mmf_get_vi_hmirror(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vi_hmirror[ch];
+}
+
 void mmf_set_vi_hmirror(int ch, bool en)
 {
 	if (ch > MMF_VI_MAX_CHN) {
@@ -3423,6 +3444,19 @@ void mmf_set_vi_hmirror(int ch, bool en)
 	}
 
 	g_priv.vi_hmirror[ch] = en;
+}
+
+void mmf_get_vi_vflip(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vi_vflip[ch];
 }
 
 void mmf_set_vi_vflip(int ch, bool en)
@@ -3455,6 +3489,26 @@ void mmf_set_vo_video_flip(int ch, bool en)
 	g_priv.vo_video_vflip[ch] = en;
 }
 
+int mmf_get_constrast(int ch, uint32_t *value)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return -1;
+	}
+
+	if (!value)
+		return -1;
+
+	ISP_CSC_ATTR_S stCscAttr;
+
+	memset(&stCscAttr, 0, sizeof(ISP_CSC_ATTR_S));
+
+	CVI_ISP_GetCSCAttr(ch, &stCscAttr);
+	*value = stCscAttr.Contrast;
+
+	return 0;
+}
+
 void mmf_set_constrast(int ch, uint32_t val)
 {
 	if (ch > MMF_VI_MAX_CHN) {
@@ -3472,6 +3526,26 @@ void mmf_set_constrast(int ch, uint32_t val)
 	stCscAttr.Enable = true;
 	stCscAttr.Contrast = val;
 	CVI_ISP_SetCSCAttr(ch, &stCscAttr);
+}
+
+int mmf_get_saturation(int ch, uint32_t *value)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return -1;
+	}
+
+	if (!value)
+		return -1;
+
+	ISP_CSC_ATTR_S stCscAttr;
+
+	memset(&stCscAttr, 0, sizeof(ISP_CSC_ATTR_S));
+
+	CVI_ISP_GetCSCAttr(ch, &stCscAttr);
+	*value = stCscAttr.Saturation;
+
+	return 0;
 }
 
 void mmf_set_saturation(int ch, uint32_t val)
@@ -3494,6 +3568,24 @@ void mmf_set_saturation(int ch, uint32_t val)
 	CVI_ISP_SetCSCAttr(ch, &stCscAttr);
 }
 
+int mmf_get_luma(int ch, uint32_t *value)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return -1;
+	}
+
+	if (!value)
+		return -1;
+
+	ISP_CSC_ATTR_S stCscAttr;
+	memset(&stCscAttr, 0, sizeof(ISP_CSC_ATTR_S));
+
+	CVI_ISP_GetCSCAttr(ch, &stCscAttr);
+	*value = stCscAttr.Luma;
+
+	return 0;
+}
 
 void mmf_set_luma(int ch, uint32_t val)
 {
