@@ -1798,9 +1798,9 @@ int mmf_add_vo_channel_with_fit(int layer, int ch, int width, int height, int fo
 	return _mmf_add_vo_channel(layer, ch, width, height, format, PIXEL_FORMAT_NV21, 30, 0, !g_priv.vo_video_hmirror[ch], !g_priv.vo_video_vflip[ch], fit);
 }
 
-int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int fit)
+int mmf_add_vo_channel(int layer, int ch, int width, int height, int format)
 {
-	return mmf_add_vo_channel_with_fit(layer, ch, width, height, format, fit);
+	return mmf_add_vo_channel_with_fit(layer, ch, width, height, format, priv.vo_vpss_fit[ch]);
 }
 
 int mmf_del_vo_channel(int layer, int ch) {
@@ -2252,8 +2252,8 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 	return CVI_SUCCESS;
 }
 
-int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
-	return mmf_vo_frame_push_with_fit(layer, ch, data, len, width, height, format, fit);
+int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format) {
+	return mmf_vo_frame_push_with_fit(layer, ch, data, len, width, height, format, priv.vo_vpss_fit[ch]);
 }
 
 static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYPE_E enType, MMF_CHN_S *pstChn)

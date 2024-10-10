@@ -62,7 +62,7 @@ void mmf_vi_frame_free(int ch);
 
 // manage vo channels
 int mmf_get_vo_unused_channel(int layer);
-int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int fit);
+int mmf_add_vo_channel(int layer, int ch, int width, int height, int format);
 int mmf_add_vo_channel_with_fit(int layer, int ch, int width, int height, int format, int fit);
 int mmf_del_vo_channel(int layer, int ch);
 int mmf_del_vo_channel_all(int layer);
@@ -72,7 +72,7 @@ void mmf_set_vo_video_flip(int ch, bool en);
 
 // flush vo
 int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit);
-int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format, int fit);
+int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format);
 
 // rgn
 int mmf_get_region_unused_channel(void);
