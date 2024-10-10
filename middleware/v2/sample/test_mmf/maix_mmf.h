@@ -13,6 +13,26 @@ typedef struct {
     int count;
 } mmf_h265_stream_t;
 
+typedef struct {
+    uint8_t type;           // 0, jpg; 1, h265; 2, h264
+    int w;
+	int h;
+	int fmt;
+	uint8_t jpg_quality;	// jpeg
+	int gop;				// h264/h265
+	int intput_fps;			// h264/h265
+	int output_fps;			// h264/h265
+	int bitrate;			// h264/h265
+} mmf_venc_cfg_t;
+
+typedef struct {
+    uint8_t type;           // 0, jpg; 1, h265; 2, h264
+    int w;
+	int h;
+	int fmt;
+    int buffer_num;
+} mmf_vdec_cfg_t;
+
 // init sys
 int mmf_init(void);
 int mmf_deinit(void);
@@ -27,6 +47,7 @@ int mmf_vi_get_max_size(int *width, int *height);
 int mmf_add_vi_channel(int ch, int width, int height, int format);
 int mmf_del_vi_channel(int ch);
 int mmf_del_vi_channel_all(void);
+int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h);
 int mmf_reset_vi_channel(int ch, int width, int height, int format);
 bool mmf_vi_chn_is_open(int ch);
 int mmf_vi_aligned_width(int ch);
@@ -94,6 +115,8 @@ int mmf_get_exptime(int ch, uint32_t *exptime);
 int mmf_set_exptime(int ch, uint32_t exptime);
 int mmf_get_iso_num(int ch, uint32_t *iso_num);
 int mmf_set_iso_num(int ch, uint32_t iso_num);
+int mmf_get_again(int ch, uint32_t *gain);
+int mmf_set_again(int ch, uint32_t gain);   // gain = [0x400, 0x7FFFFFFF]
 int mmf_get_exptime_and_iso(int ch, uint32_t *exptime, uint32_t *iso_num);
 int mmf_set_exptime_and_iso(int ch, uint32_t exptime, uint32_t iso_num);
 void mmf_set_constrast(int ch, uint32_t val);
@@ -102,6 +125,8 @@ void mmf_set_luma(int ch, uint32_t val);
 int mmf_get_constrast(int ch, uint32_t *value);
 int mmf_get_saturation(int ch, uint32_t *value);
 int mmf_get_luma(int ch, uint32_t *value);
+int mmf_set_wb_mode(int ch, int mode);
+int mmf_get_wb_mode(int ch);
 
 // sensor info
 int mmf_get_sensor_id(void);
@@ -113,6 +138,8 @@ int mmf_vi_init0(uint32_t param, ...);
 int mmf_add_vi_channel0(uint32_t param, ...);
 int mmf_add_vo_channel0(uint32_t param, ...);
 int mmf_add_region_channel0(uint32_t param, ...);
+int mmf_add_venc_channel0(uint32_t param, ...);
+int mmf_add_vdec_channel0(uint32_t param, ...);
 
 static inline int mmf_init_v2(int reload_kmod) {
     return mmf_init0(MMF_FUNC_SET_PARAM(0, 1), reload_kmod);
@@ -136,6 +163,14 @@ static inline int mmf_add_vo_channel_v2(int layer, int ch, int width, int height
 
 static inline int mmf_add_region_channel_v2(int ch, int type, int mod_id, int dev_id, int chn_id, int x, int y, int width, int height, int format) {
     return mmf_add_region_channel0(MMF_FUNC_SET_PARAM(0, 10), ch, type, mod_id, dev_id, chn_id, x, y, width, height, format);
+}
+
+static inline int mmf_add_venc_channel_v2(int ch, void *cfg) {
+    return mmf_add_venc_channel0(MMF_FUNC_SET_PARAM(0, 2), ch, cfg);
+}
+
+static inline int mmf_add_vdec_channel_v2(int ch, int format_out, int pool_num, VDEC_CHN_ATTR_S *cfg) {
+    return mmf_add_vdec_channel0(MMF_FUNC_SET_PARAM(0, 4), ch, format_out, pool_num, cfg);
 }
 
 #endif // __SOPHGO_MIDDLEWARE_HPP__

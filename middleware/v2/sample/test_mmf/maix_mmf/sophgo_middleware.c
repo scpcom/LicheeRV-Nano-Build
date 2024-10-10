@@ -3252,6 +3252,16 @@ int mmf_enc_h265_free(int ch)
 	return s32Ret;
 }
 
+int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
+{
+	return -1;
+}
+
+int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg)
+{
+	return -1;
+}
+
 int mmf_invert_format_to_maix(int mmf_format) {
 	switch (mmf_format) {
 		case PIXEL_FORMAT_RGB_888:
@@ -3639,6 +3649,31 @@ int mmf_vi_get_max_size(int *width, int *height)
 	return 0;
 }
 
+int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h)
+{
+	return -1;
+}
+
+int mmf_get_again(int ch, uint32_t *gain)
+{
+	return 0;
+}
+
+int mmf_set_again(int ch, uint32_t gain)
+{
+	return -1;
+}
+
+int mmf_set_wb_mode(int ch, int mode)
+{
+	return -1;
+}
+
+int mmf_get_wb_mode(int ch)
+{
+	return 0;
+}
+
 int mmf_init0(uint32_t param, ...)
 {
 	int method = MMF_FUNC_GET_PARAM_METHOD(param);
@@ -3787,4 +3822,36 @@ int mmf_add_region_channel0(uint32_t param, ...)
 	va_end(ap);
 
 	return mmf_add_region_channel(ch, type, mod_id, dev_id, chn_id, x, y, width, height, format);
+}
+
+int mmf_add_venc_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 2))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	void *cfg = va_arg(ap, void*);
+	va_end(ap);
+
+	return mmf_add_venc_channel(ch, (mmf_venc_cfg_t*)cfg);
+}
+
+int mmf_add_vdec_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 2))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	void *cfg = va_arg(ap, void*);
+	va_end(ap);
+
+	return mmf_add_vdec_channel(ch, (mmf_vdec_cfg_t *)cfg);
 }
