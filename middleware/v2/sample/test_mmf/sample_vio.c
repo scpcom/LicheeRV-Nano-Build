@@ -641,8 +641,8 @@ static int _test_vo_only(void)
 
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
-	if (0 != mmf_add_vo_channel(layer, vo_ch, show_w, show_h, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, show_w, show_h, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		exit_flag = 1;
 	}
 
@@ -652,7 +652,7 @@ static int _test_vo_only(void)
 	while (!exit_flag) {
 		struct timeval tv, tv2;
 		gettimeofday(&tv, NULL);
-		mmf_vo_frame_push(layer, vo_ch, filebuf, filelen, img_w, img_h, img_fmt, fit);
+		mmf_vo_frame_push_with_fit(layer, vo_ch, filebuf, filelen, img_w, img_h, img_fmt, fit);
 		gettimeofday(&tv2, NULL);
 		DEBUG("mmf vo frame push. %ld\r\n", (tv2.tv_usec + tv2.tv_sec * 1000000) - (tv.tv_usec + tv.tv_sec * 1000000));
 		usleep(1000 * 1000);
@@ -861,8 +861,8 @@ static int _test_vio(void)
 						__func__, __LINE__, exptime, iso_num);
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
-	if (0 != mmf_add_vo_channel(layer, vo_ch, 552, 368, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, 552, 368, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vi_channel(vi_ch);
 		mmf_deinit();
 		return -1;
@@ -934,7 +934,7 @@ static int _test_vio(void)
 
 			start = _get_time_us();
 			DEBUG("Push..width:%d height:%d data_size:%d format:%d\r\n", img_w, img_h, show_img_size, img_fmt);
-			mmf_vo_frame_push(layer, vo_ch, show_img, show_img_size, img_w, img_h, format, fit);
+			mmf_vo_frame_push_with_fit(layer, vo_ch, show_img, show_img_size, img_w, img_h, format, fit);
 			DEBUG(">>>>>> flush vo frame %ld\n", _get_time_us() - start);
 
 			// static int cnt = 0;
@@ -987,8 +987,8 @@ static int _test_region(void)
 
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
-	if (0 != mmf_add_vo_channel(layer, vo_ch, vo_w, vo_h, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, vo_w, vo_h, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vi_channel(vi_ch);
 		mmf_deinit();
 		return -1;
@@ -1014,7 +1014,7 @@ static int _test_region(void)
 
 	// first snap, do nothing
 	if (0 == mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format)) {
-		mmf_vo_frame_push(layer, vo_ch, data, data_size, width, height, format, fit);
+		mmf_vo_frame_push_with_fit(layer, vo_ch, data, data_size, width, height, format, fit);
 		mmf_vi_frame_free(vi_ch);
 	}
 
@@ -1109,7 +1109,7 @@ static int _test_region(void)
 				free(rgn_data);
 			}
 			DEBUG("Push..width:%d height:%d data_size:%d format:%d\r\n", img_w, img_h, show_img_size, img_fmt);
-			mmf_vo_frame_push(layer, vo_ch, show_img, show_img_size, img_w, img_h, format, fit);
+			mmf_vo_frame_push_with_fit(layer, vo_ch, show_img, show_img_size, img_w, img_h, format, fit);
 
 			gettimeofday(&tv, NULL);
 			end = tv.tv_usec + tv.tv_sec * 1000000;
@@ -1153,8 +1153,8 @@ static int _test_region(void)
 
 	int video_layer = 0;
 	int vo_video_ch = mmf_get_vo_unused_channel(video_layer);
-	if (0 != mmf_add_vo_channel(video_layer, vo_video_ch, vo_w, vo_h, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(video_layer, vo_video_ch, vo_w, vo_h, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vi_channel(vi_ch);
 		mmf_deinit();
 		return -1;
@@ -1163,8 +1163,8 @@ static int _test_region(void)
 	int osd_layer = 1;
 	int osd_img_fmt = PIXEL_FORMAT_ARGB_8888;
 	int vo_osd_ch = mmf_get_vo_unused_channel(osd_layer);
-	if (0 != mmf_add_vo_channel(osd_layer, vo_osd_ch, vo_w, vo_h, osd_img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(osd_layer, vo_osd_ch, vo_w, vo_h, osd_img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vo_channel(video_layer, vo_video_ch);
 		mmf_del_vi_channel(vi_ch);
 		mmf_deinit();
@@ -1177,14 +1177,14 @@ static int _test_region(void)
 
 	// first snap, do nothing
 	if (0 == mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format)) {
-		mmf_vo_frame_push(video_layer, vo_video_ch, data, data_size, width, height, format, fit);
+		mmf_vo_frame_push_with_fit(video_layer, vo_video_ch, data, data_size, width, height, format, fit);
 		mmf_vi_frame_free(vi_ch);
 	}
 
 	{
 		uint8_t *rgn_data = _prepare_image(vo_w, vo_h, PIXEL_FORMAT_ARGB_8888);
 		start = _get_time_us();
-		mmf_vo_frame_push(osd_layer, vo_osd_ch, rgn_data, vo_w * vo_h * 4, img_w, img_h, osd_img_fmt, fit);
+		mmf_vo_frame_push_with_fit(osd_layer, vo_osd_ch, rgn_data, vo_w * vo_h * 4, img_w, img_h, osd_img_fmt, fit);
 		DEBUG("osd frame push use: %ld us\n", _get_time_us() - start);
 		free(rgn_data);
 	}
@@ -1246,15 +1246,15 @@ static int _test_region(void)
 			{
 				uint8_t *rgn_data = _prepare_image(vo_w, vo_h, PIXEL_FORMAT_ARGB_8888);
 				start = _get_time_us();
-				mmf_vo_frame_push(osd_layer, vo_osd_ch, rgn_data, vo_w * vo_h * 4, img_w, img_h, osd_img_fmt, fit);
+				mmf_vo_frame_push_with_fit(osd_layer, vo_osd_ch, rgn_data, vo_w * vo_h * 4, img_w, img_h, osd_img_fmt, fit);
 				DEBUG("osd frame push use: %ld us\n", _get_time_us() - start);
 				free(rgn_data);
 			}
 			DEBUG("Push..width:%d height:%d data_size:%d format:%d\r\n", img_w, img_h, show_img_size, img_fmt);
 
 			start = _get_time_us();
-			if (0 != mmf_vo_frame_push(video_layer, vo_video_ch, show_img, show_img_size, img_w, img_h, format, fit)) {
-				DEBUG("mmf_vo_frame_push failed!\r\n");
+			if (0 != mmf_vo_frame_push_with_fit(video_layer, vo_video_ch, show_img, show_img_size, img_w, img_h, format, fit)) {
+				DEBUG("mmf_vo_frame_push_with_fit failed!\r\n");
 				exit_flag = 1;
 			}
 			DEBUG("video frame push use: %ld us\n", _get_time_us() - start);
@@ -1322,8 +1322,8 @@ static int _test_venc_jpg(void)
 
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
-	if (0 != mmf_add_vo_channel(layer, vo_ch, show_w, show_h, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, show_w, show_h, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vi_channel(vi_ch);
 		mmf_deinit();
 		return -1;
@@ -1450,7 +1450,7 @@ static int _test_venc_jpg(void)
 		}
 
 		{
-			mmf_vo_frame_push(layer, vo_ch, filebuf, filelen, img_w, img_h, img_fmt, fit);
+			mmf_vo_frame_push_with_fit(layer, vo_ch, filebuf, filelen, img_w, img_h, img_fmt, fit);
 			usleep(33 * 1000);
 		}
 	}
@@ -2546,8 +2546,8 @@ static int _test_multiple_vi(void)
 
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
-	if (0 != mmf_add_vo_channel(layer, vo_ch, 552, 368, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, 552, 368, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vi_channel(vi_ch);
 		mmf_deinit();
 		return -1;
@@ -2622,7 +2622,7 @@ static int _test_multiple_vi(void)
 
 		start = _get_time_us();
 		DEBUG("Push..width:%d height:%d data_size:%d format:%d\r\n", img_w, img_h, show_img_size, img_fmt);
-		mmf_vo_frame_push(layer, vo_ch, show_img, show_img_size, img_w, img_h, format, fit);
+		mmf_vo_frame_push_with_fit(layer, vo_ch, show_img, show_img_size, img_w, img_h, format, fit);
 		DEBUG(">>>>>> flush vo frame %ld\n", _get_time_us() - start);
 
 		DEBUG(">>>>>> flush time %ld ms\n", (_get_time_us() - start2) / 1000);
@@ -2688,9 +2688,9 @@ static int _test_vi_region_venc_h265_rtsp(void)
 
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
-	// if (0 != mmf_add_vo_channel(layer, vo_ch, 552, 368, img_fmt, fit)) {
-	if (0 != mmf_add_vo_channel(layer, vo_ch, 832, 480, img_fmt, fit)) {
-		DEBUG("mmf_add_vo_channel failed!\r\n");
+	// if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, 552, 368, img_fmt, fit)) {
+	if (0 != mmf_add_vo_channel_with_fit(layer, vo_ch, 832, 480, img_fmt, fit)) {
+		DEBUG("mmf_add_vo_channel_with_fit failed!\r\n");
 		mmf_del_vi_channel(vi_ch);
 		mmf_del_vi_channel(vi_ch2);
 		mmf_deinit();
@@ -2855,7 +2855,7 @@ static int _test_vi_region_venc_h265_rtsp(void)
 
 		start = _get_time_us();
 		DEBUG("Push..width:%d height:%d data_size:%d format:%d\r\n", img_w2, img_h2, show_img_size, img_fmt2);
-		mmf_vo_frame_push(layer, vo_ch, show_img, show_img_size, img_w, img_h, img_fmt, fit);
+		mmf_vo_frame_push_with_fit(layer, vo_ch, show_img, show_img_size, img_w, img_h, img_fmt, fit);
 		DEBUG(">>>>>> flush vo frame %ld\n", _get_time_us() - start);
 
 		DEBUG("use %ld us\r\n", _get_time_us() - last_loop_us);
