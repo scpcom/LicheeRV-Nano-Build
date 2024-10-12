@@ -89,12 +89,14 @@ mmflibs:
 	@cp -p media_server-1.0.1/librtp/release.linux/librtp.a $(MSK_LIBD)/
 	@cp -p media_server-1.0.1/librtsp/release.linux/librtsp.a $(MSK_LIBD)/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maixcam_lib/
 
 clean_mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/sdk/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/avcodec/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maixcam_lib/ clean
 
 $(COMMON_DIR)/%.o: $(COMMON_DIR)/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
