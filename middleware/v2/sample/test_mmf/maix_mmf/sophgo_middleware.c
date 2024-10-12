@@ -90,6 +90,7 @@ typedef struct {
 	int enc_jpg_frame_w;
 	int enc_jpg_frame_h;
 	int enc_jpg_frame_fmt;
+	int enc_jpg_quality;
 	int enc_jpg_running;
 	VIDEO_FRAME_INFO_S *enc_jpg_frame;
 
@@ -133,6 +134,8 @@ static g_priv_t g_priv;
 static void priv_param_init(void)
 {
 	priv.vo_rotate = 90;
+	priv.enc_jpg_quality = 80;
+
 	priv.vb_conf.u32MaxPoolCnt = 1;
 	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
 	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkCnt = 8;
@@ -2707,6 +2710,7 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 	priv.enc_jpg_frame_w = w;
 	priv.enc_jpg_frame_h = h;
 	priv.enc_jpg_frame_fmt = format;
+	priv.enc_jpg_quality = quality;
 	priv.enc_jpg_is_init = 1;
 	priv.enc_jpg_running = 0;
 
@@ -2781,9 +2785,13 @@ int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int forma
 	}
 
 	SIZE_S stSize = {(CVI_U32)w, (CVI_U32)h};
-	if (priv.enc_jpg_frame == NULL || priv.enc_jpg_frame_w != w || priv.enc_jpg_frame_h != h || priv.enc_jpg_frame_fmt != format) {
-		if (!priv.enc_jpg_is_init)
-			mmf_enc_jpg_init(ch, w, h, format, quality);
+	if (priv.enc_jpg_frame == NULL || priv.enc_jpg_frame_w != w || priv.enc_jpg_frame_h != h || priv.enc_jpg_frame_fmt != format || priv.enc_jpg_quality != quality) {
+		mmf_enc_jpg_deinit(ch);
+		s32Ret = mmf_enc_jpg_init(ch, w, h, format, quality);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("mmf_enc_jpg_init failed with %d\n", s32Ret);
+			return s32Ret;
+		}
 
 		priv.enc_jpg_frame_w = w;
 		priv.enc_jpg_frame_h = h;
@@ -2839,7 +2847,7 @@ int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int forma
 
 int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 {
-	return mmf_enc_jpg_push_with_quality(ch, data, w,h, format, 80);
+	return mmf_enc_jpg_push_with_quality(ch, data, w,h, format, priv.enc_jpg_quality);
 }
 
 int mmf_enc_jpg_pop(int ch, uint8_t **data, int *size)
