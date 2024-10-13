@@ -1,3 +1,9 @@
+#ifdef __cplusplus
+#include <cstdarg>
+#else
+#include <stdarg.h>
+#endif
+
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
@@ -11,6 +17,17 @@
 #include <inttypes.h>
 
 #include <fcntl.h>		/* low-level i/o */
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <linux/types.h>
+#include <linux/cvi_common.h>
+#include <linux/cvi_comm_sys.h>
+#include <linux/sys_uapi.h>
+extern int ionFree(struct sys_ion_data *para);
+#ifdef __cplusplus
+}
+#endif
 #include "cvi_buffer.h"
 #include "cvi_ae_comm.h"
 #include "cvi_awb_comm.h"
@@ -24,6 +41,13 @@
 #include "sample_comm.h"
 #include "maix_mmf.h"
 
+
+#ifndef MMF_FUNC_GET_PARAM_METHOD
+#define MMF_FUNC_GET_PARAM_METHOD(x)    ((x >> 24) & 0xffffff)
+#endif
+#ifndef MMF_FUNC_GET_PARAM_NUM
+#define MMF_FUNC_GET_PARAM_NUM(x)       ((x & 0xff))
+#endif
 
 #define MMF_VI_MAX_CHN 			2		// manually limit the max channel number of vi
 #define MMF_VO_VIDEO_MAX_CHN 	1		// manually limit the max channel number of vo
@@ -90,6 +114,7 @@ typedef struct {
 	int enc_jpg_frame_w;
 	int enc_jpg_frame_h;
 	int enc_jpg_frame_fmt;
+	int enc_jpg_quality;
 	int enc_jpg_running;
 	VIDEO_FRAME_INFO_S *enc_jpg_frame;
 
@@ -133,6 +158,8 @@ static g_priv_t g_priv;
 static void priv_param_init(void)
 {
 	priv.vo_rotate = 90;
+	priv.enc_jpg_quality = 80;
+
 	priv.vb_conf.u32MaxPoolCnt = 1;
 	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
 	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkCnt = 8;
@@ -304,8 +331,7 @@ static int _free_leak_memory_of_ion(void)
 
 			printf("ion_data.size:%d, ion_data.addr_p:%#x, ion_data.name:%s\r\n", ion_data.size, (int)ion_data.addr_p, ion_data.name);
 
-			extern int ionFree2(struct sys_ion_data2 *para);
-			int res = ionFree2(&ion_data);
+			int res = ionFree((struct sys_ion_data *)&ion_data);
 			if (res) {
 				printf("ionFree2 failed! res:%#x\r\n", res);
 				mmf_deinit();
@@ -1043,6 +1069,12 @@ int mmf_deinit(void) {
     return 0;
 }
 
+int mmf_try_deinit(bool force)
+{
+	UNUSED(force);
+	return mmf_deinit();
+}
+
 int mmf_get_vi_unused_channel(void) {
 	return _vi_get_unused_ch();
 }
@@ -1191,7 +1223,7 @@ static CVI_S32 _mmf_vpss_chn_deinit(VPSS_GRP VpssGrp, VPSS_CHN VpssChn)
 	return CVI_VPSS_DisableChn(VpssGrp, VpssChn);
 }
 
-static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
+static CVI_S32 _mmf_vpss_init_new_with_fps(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format, int fps)
 {
 	VPSS_GRP_ATTR_S    stVpssGrpAttr;
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -1205,8 +1237,8 @@ static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 heigh
 	stVpssGrpAttr.u32MaxH                        = height;
 	stVpssGrpAttr.u8VpssDev                      = 0;
 
-	astVpssChnAttr.stFrameRate.s32SrcFrameRate = 60;
-	astVpssChnAttr.stFrameRate.s32DstFrameRate = 60;
+	astVpssChnAttr.stFrameRate.s32SrcFrameRate = fps;
+	astVpssChnAttr.stFrameRate.s32DstFrameRate = fps;
 
 
 	s32Ret = CVI_VPSS_CreateGrp(VpssGrp, &stVpssGrpAttr);
@@ -1235,6 +1267,11 @@ static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 heigh
 		return CVI_FAILURE;
 	}
 	return s32Ret;
+}
+
+static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
+{
+	return _mmf_vpss_init_new_with_fps(VpssGrp, width, height, format, 60);
 }
 
 int mmf_vi_init(void)
@@ -1272,7 +1309,7 @@ int mmf_vi_deinit(void)
 	return s32Ret;
 }
 
-int mmf_add_vi_channel(int ch, int width, int height, int format) {
+static int _mmf_add_vi_channel(int ch, int width, int height, int format, int fps, int depth, bool mirror, bool flip, int fit) {
 	if (!priv.mmf_used_cnt || !priv.vi_is_inited) {
 		printf("%s: maix multi-media or vi not inited\n", __func__);
 		return -1;
@@ -1336,20 +1373,16 @@ _need_deinit_vpss:
 	return -1;
 #else
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	int fps = 30;
-	int depth = 2;
 	int width_out = ALIGN(width, DEFAULT_ALIGN);
 	int height_out = height;
 	PIXEL_FORMAT_E format_out = (PIXEL_FORMAT_E)format;
-	bool mirror = !g_priv.vi_hmirror[ch];
-	bool flip = !g_priv.vi_vflip[ch];
 	s32Ret = _mmf_vpss_chn_deinit(0, ch);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
-	s32Ret = _mmf_vpss_chn_init(0, ch, width_out, height_out, format_out, fps, depth, mirror, flip, 2);
+	s32Ret = _mmf_vpss_chn_init(0, ch, width_out, height_out, format_out, fps, depth, mirror, flip, fit);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
@@ -1368,6 +1401,10 @@ _need_deinit_vpss_chn:
 	_mmf_vpss_chn_deinit(0, ch);
 	return -1;
 #endif
+}
+
+int mmf_add_vi_channel(int ch, int width, int height, int format) {
+	return  _mmf_add_vi_channel(ch, width, height, format, 30, 2, !g_priv.vi_hmirror[ch], !g_priv.vi_vflip[ch], 2);
 }
 
 int mmf_del_vi_channel(int ch) {
@@ -1441,7 +1478,7 @@ int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int
 
 	int ret = -1;
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
-	if (CVI_VPSS_GetChnFrame(0, ch, frame, 3000) == 0) {
+	if (CVI_VPSS_GetChnFrame(0, ch, frame, 100) == 0) {
         int image_size = frame->stVFrame.u32Length[0]
                         + frame->stVFrame.u32Length[1]
 				        + frame->stVFrame.u32Length[2];
@@ -1498,8 +1535,7 @@ int mmf_get_vo_unused_channel(int layer) {
 // fit = 0, width to new width, height to new height, may be stretch
 // fit = 1, keep aspect ratio, fill blank area with black color
 // fit = 2, keep aspect ratio, crop image to fit new size
-int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int fit) {
-	bool mirror, flip;
+static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int format_in, int format_out, int fps, int depth, bool mirror, bool flip, int fit) {
 	if (layer == MMF_VO_VIDEO_LAYER) {
 		if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
 			printf("invalid ch %d\n", ch);
@@ -1521,7 +1557,7 @@ int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int
 			stDefImageSize.u32Height = (CVI_U32)width;
 		}
 	#else
-		if (format == PIXEL_FORMAT_NV21 && (priv.vo_rotate == 90 || priv.vo_rotate == 270)) {
+		if (format_in == PIXEL_FORMAT_NV21 && (priv.vo_rotate == 90 || priv.vo_rotate == 270)) {
 			stDefDispRect.u32Width = (CVI_U32)height;
 			stDefDispRect.u32Height = (CVI_U32)width;
 			stDefImageSize.u32Width = (CVI_U32)height;
@@ -1529,10 +1565,8 @@ int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int
 		}
 	#endif
 		SIZE_S stSizeIn, stSizeOut;
-		int fps = 30;
-		int depth = 0;
-		PIXEL_FORMAT_E formatIn = (PIXEL_FORMAT_E)format;
-		PIXEL_FORMAT_E formatOut = (PIXEL_FORMAT_E)PIXEL_FORMAT_NV21;
+		PIXEL_FORMAT_E formatIn = (PIXEL_FORMAT_E)format_in;
+		PIXEL_FORMAT_E formatOut = (PIXEL_FORMAT_E)format_out;
 
 		CVI_VO_Get_Panel_Status(0, ch, &panel_init);
 		if (panel_init) {
@@ -1584,14 +1618,12 @@ int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int
 		stSizeIn.u32Height  = height;
 		stSizeOut.u32Width  = width;
 		stSizeOut.u32Height = height;
-		priv.vo_vpss_in_format[ch] = format;
+		priv.vo_vpss_in_format[ch] = format_in;
 		priv.vo_vpss_in_size[ch].u32Width = stSizeIn.u32Width;
 		priv.vo_vpss_in_size[ch].u32Height = stSizeIn.u32Height;
 		priv.vo_vpss_out_size[ch].u32Width = stSizeOut.u32Width;
 		priv.vo_vpss_out_size[ch].u32Height = stSizeOut.u32Height;
 		priv.vo_vpss_fit[ch] = fit;
-		mirror = !g_priv.vo_video_hmirror[ch];
-		flip = !g_priv.vo_video_vflip[ch];
 #if 1
 		s32Ret = _mmf_vpss_deinit_new(1);
 		if (s32Ret != CVI_SUCCESS) {
@@ -1633,8 +1665,8 @@ int mmf_add_vo_channel(int layer, int ch, int width, int height, int format, int
 
 		priv.vo_video_pre_frame_width[ch] = width;
 		priv.vo_video_pre_frame_height[ch] = height;
-		priv.vo_video_pre_frame_format[ch] = format;
-		// priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format);
+		priv.vo_video_pre_frame_format[ch] = format_in;
+		// priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format_in);
 		// if (!priv.vo_video_pre_frame[ch]) {
 		// 	printf("Alloc frame failed!\r\n");
 		// 	goto error_and_unbind;
@@ -1697,8 +1729,8 @@ error_and_stop_vo:
 
 		priv.vo_video_pre_frame_width[ch] = width;
 		priv.vo_video_pre_frame_height[ch] = height;
-		priv.vo_video_pre_frame_format[ch] = format;
-		priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format);
+		priv.vo_video_pre_frame_format[ch] = format_in;
+		priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format_in);
 		if (!priv.vo_video_pre_frame[ch]) {
 			printf("Alloc frame failed!\r\n");
 			goto error_and_unbind;
@@ -1740,12 +1772,12 @@ error_and_deinit_vpss:
 			return -1;
 		}
 
-		if (format != PIXEL_FORMAT_ARGB_8888) {
+		if (format_in != PIXEL_FORMAT_ARGB_8888) {
 			printf("only support ARGB format.\n");
 			return -1;
 		}
 
-		if (0 != mmf_add_region_channel(ch, OVERLAY_RGN, CVI_ID_VPSS, 1, ch, 0, 0, width, height, format)) {
+		if (0 != mmf_add_region_channel(ch, OVERLAY_RGN, CVI_ID_VPSS, 1, ch, 0, 0, width, height, format_in)) {
 			printf("mmf_add_region_channel failed!\r\n");
 			return -1;
 		}
@@ -1759,6 +1791,16 @@ error_and_deinit_vpss:
 	}
 
 	return -1;
+}
+
+int mmf_add_vo_channel_with_fit(int layer, int ch, int width, int height, int format, int fit)
+{
+	return _mmf_add_vo_channel(layer, ch, width, height, format, PIXEL_FORMAT_NV21, 30, 0, !g_priv.vo_video_hmirror[ch], !g_priv.vo_video_vflip[ch], fit);
+}
+
+int mmf_add_vo_channel(int layer, int ch, int width, int height, int format)
+{
+	return mmf_add_vo_channel_with_fit(layer, ch, width, height, format, priv.vo_vpss_fit[ch]);
 }
 
 int mmf_del_vo_channel(int layer, int ch) {
@@ -1883,7 +1925,7 @@ bool mmf_vo_channel_is_open(int layer, int ch) {
 }
 
 // flush vo
-int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
+int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	UNUSED(len);
 	UNUSED(layer);
@@ -2210,6 +2252,9 @@ int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int hei
 	return CVI_SUCCESS;
 }
 
+int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format) {
+	return mmf_vo_frame_push_with_fit(layer, ch, data, len, width, height, format, priv.vo_vpss_fit[ch]);
+}
 
 static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYPE_E enType, MMF_CHN_S *pstChn)
 {
@@ -2688,6 +2733,7 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 	priv.enc_jpg_frame_w = w;
 	priv.enc_jpg_frame_h = h;
 	priv.enc_jpg_frame_fmt = format;
+	priv.enc_jpg_quality = quality;
 	priv.enc_jpg_is_init = 1;
 	priv.enc_jpg_running = 0;
 
@@ -2753,7 +2799,7 @@ int mmf_enc_jpg_deinit(int ch)
 	return s32Ret;
 }
 
-int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
+int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
 	UNUSED(ch);
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -2762,9 +2808,13 @@ int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 	}
 
 	SIZE_S stSize = {(CVI_U32)w, (CVI_U32)h};
-	if (priv.enc_jpg_frame == NULL || priv.enc_jpg_frame_w != w || priv.enc_jpg_frame_h != h || priv.enc_jpg_frame_fmt != format) {
-		if (!priv.enc_jpg_is_init)
-			mmf_enc_jpg_init(ch, w, h, format, 80);
+	if (priv.enc_jpg_frame == NULL || priv.enc_jpg_frame_w != w || priv.enc_jpg_frame_h != h || priv.enc_jpg_frame_fmt != format || priv.enc_jpg_quality != quality) {
+		mmf_enc_jpg_deinit(ch);
+		s32Ret = mmf_enc_jpg_init(ch, w, h, format, quality);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("mmf_enc_jpg_init failed with %d\n", s32Ret);
+			return s32Ret;
+		}
 
 		priv.enc_jpg_frame_w = w;
 		priv.enc_jpg_frame_h = h;
@@ -2816,6 +2866,11 @@ int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 	priv.enc_jpg_running = 1;
 
 	return s32Ret;
+}
+
+int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
+{
+	return mmf_enc_jpg_push_with_quality(ch, data, w,h, format, priv.enc_jpg_quality);
 }
 
 int mmf_enc_jpg_pop(int ch, uint8_t **data, int *size)
@@ -3207,6 +3262,16 @@ int mmf_enc_h265_free(int ch)
 	return s32Ret;
 }
 
+int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
+{
+	return -1;
+}
+
+int mmf_add_vdec_channel(int ch, int format_out, mmf_vdec_cfg_t *cfg)
+{
+	return -1;
+}
+
 int mmf_invert_format_to_maix(int mmf_format) {
 	switch (mmf_format) {
 		case PIXEL_FORMAT_RGB_888:
@@ -3399,6 +3464,19 @@ int mmf_get_sensor_id(void)
 	return -1;
 }
 
+void mmf_get_vi_hmirror(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vi_hmirror[ch];
+}
+
 void mmf_set_vi_hmirror(int ch, bool en)
 {
 	if (ch > MMF_VI_MAX_CHN) {
@@ -3407,6 +3485,19 @@ void mmf_set_vi_hmirror(int ch, bool en)
 	}
 
 	g_priv.vi_hmirror[ch] = en;
+}
+
+void mmf_get_vi_vflip(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vi_vflip[ch];
 }
 
 void mmf_set_vi_vflip(int ch, bool en)
@@ -3439,6 +3530,26 @@ void mmf_set_vo_video_flip(int ch, bool en)
 	g_priv.vo_video_vflip[ch] = en;
 }
 
+int mmf_get_constrast(int ch, uint32_t *value)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return -1;
+	}
+
+	if (!value)
+		return -1;
+
+	ISP_CSC_ATTR_S stCscAttr;
+
+	memset(&stCscAttr, 0, sizeof(ISP_CSC_ATTR_S));
+
+	CVI_ISP_GetCSCAttr(ch, &stCscAttr);
+	*value = stCscAttr.Contrast;
+
+	return 0;
+}
+
 void mmf_set_constrast(int ch, uint32_t val)
 {
 	if (ch > MMF_VI_MAX_CHN) {
@@ -3456,6 +3567,26 @@ void mmf_set_constrast(int ch, uint32_t val)
 	stCscAttr.Enable = true;
 	stCscAttr.Contrast = val;
 	CVI_ISP_SetCSCAttr(ch, &stCscAttr);
+}
+
+int mmf_get_saturation(int ch, uint32_t *value)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return -1;
+	}
+
+	if (!value)
+		return -1;
+
+	ISP_CSC_ATTR_S stCscAttr;
+
+	memset(&stCscAttr, 0, sizeof(ISP_CSC_ATTR_S));
+
+	CVI_ISP_GetCSCAttr(ch, &stCscAttr);
+	*value = stCscAttr.Saturation;
+
+	return 0;
 }
 
 void mmf_set_saturation(int ch, uint32_t val)
@@ -3478,6 +3609,24 @@ void mmf_set_saturation(int ch, uint32_t val)
 	CVI_ISP_SetCSCAttr(ch, &stCscAttr);
 }
 
+int mmf_get_luma(int ch, uint32_t *value)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return -1;
+	}
+
+	if (!value)
+		return -1;
+
+	ISP_CSC_ATTR_S stCscAttr;
+	memset(&stCscAttr, 0, sizeof(ISP_CSC_ATTR_S));
+
+	CVI_ISP_GetCSCAttr(ch, &stCscAttr);
+	*value = stCscAttr.Luma;
+
+	return 0;
+}
 
 void mmf_set_luma(int ch, uint32_t val)
 {
@@ -3495,4 +3644,231 @@ void mmf_set_luma(int ch, uint32_t val)
 	stCscAttr.Enable = true;
 	stCscAttr.Luma = val;
 	CVI_ISP_SetCSCAttr(ch, &stCscAttr);
+}
+
+int mmf_vi_get_max_size(int *width, int *height)
+{
+	if (!width)
+		return -1;
+	if (!height)
+		return -1;
+
+	*width = priv.vi_size.u32Width;
+	*height = priv.vi_size.u32Height;
+
+	return 0;
+}
+
+int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h)
+{
+	return -1;
+}
+
+int mmf_get_again(int ch, uint32_t *gain)
+{
+	return 0;
+}
+
+int mmf_set_again(int ch, uint32_t gain)
+{
+	return -1;
+}
+
+int mmf_set_wb_mode(int ch, int mode)
+{
+	return -1;
+}
+
+int mmf_get_wb_mode(int ch)
+{
+	return 0;
+}
+
+int mmf_init0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 1))
+		return -1;
+	va_start(ap, param);
+	int reload_kmod = va_arg(ap, int);
+	va_end(ap);
+
+	UNUSED(reload_kmod);
+	return mmf_init();
+}
+
+int mmf_deinit0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 1))
+		return -1;
+	va_start(ap, param);
+	int force = va_arg(ap, int);
+	va_end(ap);
+
+	UNUSED(force);
+	return mmf_deinit();
+}
+
+int mmf_vi_init0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if (priv.vi_is_inited) {
+		return 0;
+	}
+
+	if ((method != 0) || (n_args < 8))
+		return -1;
+	va_start(ap, param);
+	int width = va_arg(ap, int);
+	int height = va_arg(ap, int);
+	int vi_format = va_arg(ap, int);
+	int vpss_format = va_arg(ap, int);
+	int fps = va_arg(ap, int);
+	int pool_num = va_arg(ap, int);
+	SAMPLE_VI_CONFIG_S *vi_cfg = va_arg(ap, SAMPLE_VI_CONFIG_S*);
+	va_end(ap);
+
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	priv.vi_format = (PIXEL_FORMAT_E)vi_format;
+	priv.vi_size.u32Width = width;
+	priv.vi_size.u32Height = height;
+	UNUSED(pool_num);
+	UNUSED(vi_cfg);
+	s32Ret = _mmf_vpss_init_new_with_fps(0, priv.vi_size.u32Width, priv.vi_size.u32Height, (PIXEL_FORMAT_E)vpss_format, fps);
+	if (s32Ret != CVI_SUCCESS) {
+		SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+	}
+
+	priv.vi_is_inited = true;
+
+	return s32Ret;
+}
+
+int mmf_add_vi_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 10))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	int width = va_arg(ap, int);
+	int height = va_arg(ap, int);
+	int format = va_arg(ap, int);
+	int fps = va_arg(ap, int);
+	int depth = va_arg(ap, int);
+	int mirror = va_arg(ap, int);
+	int vflip = va_arg(ap, int);
+	int fit = va_arg(ap, int);
+	int pool_num = va_arg(ap, int);
+	va_end(ap);
+
+	UNUSED(pool_num);
+	return _mmf_add_vi_channel(ch, width, height, format, fps, depth, mirror, vflip, fit);
+}
+
+int mmf_add_vo_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 14))
+		return -1;
+	va_start(ap, param);
+	int layer = va_arg(ap, int);
+	int ch = va_arg(ap, int);
+	int width = va_arg(ap, int);
+	int height = va_arg(ap, int);
+	int format_in = va_arg(ap, int);
+	int format_out = va_arg(ap, int);
+	int fps = va_arg(ap, int);
+	int depth = va_arg(ap, int);
+	int mirror = va_arg(ap, int);
+	int vflip = va_arg(ap, int);
+	int fit = va_arg(ap, int);
+	int rotate = va_arg(ap, int);
+	int pool_num_in = va_arg(ap, int);
+	int pool_num_out = va_arg(ap, int);
+	va_end(ap);
+
+	priv.vo_rotate = rotate;
+	UNUSED(pool_num_in);
+	UNUSED(pool_num_out);
+	return  _mmf_add_vo_channel(layer, ch, width, height, format_in, format_out, fps, depth, mirror, vflip, fit);
+}
+
+int mmf_add_region_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 10))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	int type = va_arg(ap, int);
+	int mod_id = va_arg(ap, int);
+	int dev_id = va_arg(ap, int);
+	int chn_id = va_arg(ap, int);
+	int x = va_arg(ap, int);
+	int y = va_arg(ap, int);
+	int width = va_arg(ap, int);
+	int height = va_arg(ap, int);
+	int format = va_arg(ap, int);
+	va_end(ap);
+
+	return mmf_add_region_channel(ch, type, mod_id, dev_id, chn_id, x, y, width, height, format);
+}
+
+int mmf_add_venc_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 2))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	void *cfg = va_arg(ap, void*);
+	va_end(ap);
+
+	return mmf_add_venc_channel(ch, (mmf_venc_cfg_t*)cfg);
+}
+
+int mmf_add_vdec_channel0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	int format_out = 0;
+	int pool_num = 0;
+	va_list ap;
+
+	if ((method != 0) || (n_args < 2))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	if (n_args > 2)
+		format_out = va_arg(ap, int);
+	if (n_args > 3)
+		pool_num = va_arg(ap, int);
+	void *cfg = va_arg(ap, void*);
+	va_end(ap);
+
+	UNUSED(pool_num);
+	return mmf_add_vdec_channel(ch, format_out, (mmf_vdec_cfg_t *)cfg);
 }
