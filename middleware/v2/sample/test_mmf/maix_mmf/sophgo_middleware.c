@@ -2851,7 +2851,10 @@ int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int forma
 							((uint8_t *)data) + w * h, w);
 				}
 			} else {
-				memcpy(priv.enc_jpg_frame->stVFrame.pu8VirAddr[0], ((uint8_t *)data), w * h * 3 / 2);
+				uint32_t p0_size = w * h;
+				uint32_t p1_size = w * h / 2;
+				memcpy(priv.enc_jpg_frame->stVFrame.pu8VirAddr[0], ((uint8_t *)data), p0_size);
+				memcpy(priv.enc_jpg_frame->stVFrame.pu8VirAddr[1], ((uint8_t *)data) + p0_size, p1_size);
 			}
 
 			s32Ret = CVI_VENC_SendFrame(ch, priv.enc_jpg_frame, 1000);
@@ -3152,7 +3155,10 @@ int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
 							((uint8_t *)data) + w * h0, w);
 				}
 			} else {
-				memcpy((uint8_t *)priv.enc_h265_video_frame->stVFrame.pu8VirAddr[0], ((uint8_t *)data), w * h * 3 / 2);
+				uint32_t p0_size = w * h;
+				uint32_t p1_size = w * h / 2;
+				memcpy(priv.enc_h265_video_frame->stVFrame.pu8VirAddr[0], ((uint8_t *)data), p0_size);
+				memcpy(priv.enc_h265_video_frame->stVFrame.pu8VirAddr[1], ((uint8_t *)data) + p0_size, p1_size);
 			}
 		}
 		break;
