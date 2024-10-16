@@ -55,6 +55,7 @@ void mmf_set_vi_hmirror(int ch, bool en);
 void mmf_set_vi_vflip(int ch, bool en);
 void mmf_get_vi_hmirror(int ch, bool *en);
 void mmf_get_vi_vflip(int ch, bool *en);
+void mmf_vi_set_pop_timeout(int ms);
 
 // get vi frame
 int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int *format);

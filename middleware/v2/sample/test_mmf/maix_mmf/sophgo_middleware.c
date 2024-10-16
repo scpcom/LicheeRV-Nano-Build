@@ -70,6 +70,7 @@ typedef struct {
 	int mmf_used_cnt;
 	PIXEL_FORMAT_E vi_format;
 	PIXEL_FORMAT_E vi_vpss_format;
+	int vi_pop_timeout;
 	int vo_rotate;	// 90, 180, 270
 	bool vi_is_inited;
 	bool vi_chn_is_inited[MMF_VI_MAX_CHN];
@@ -157,6 +158,7 @@ static g_priv_t g_priv;
 #define DISP_H	480
 static void priv_param_init(void)
 {
+	priv.vi_pop_timeout = 100;
 	priv.vo_rotate = 90;
 	priv.enc_jpg_quality = 80;
 
@@ -1478,7 +1480,7 @@ int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int
 
 	int ret = -1;
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
-	if (CVI_VPSS_GetChnFrame(0, ch, frame, 100) == 0) {
+	if (CVI_VPSS_GetChnFrame(0, ch, frame, priv.vi_pop_timeout) == 0) {
         int image_size = frame->stVFrame.u32Length[0]
                         + frame->stVFrame.u32Length[1]
 				        + frame->stVFrame.u32Length[2];
@@ -3665,6 +3667,11 @@ int mmf_vi_get_max_size(int *width, int *height)
 	return 0;
 }
 
+void mmf_vi_set_pop_timeout(int ms)
+{
+	priv.vi_pop_timeout = ms;
+}
+
 int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h)
 {
 	return -1;
@@ -3782,6 +3789,7 @@ int mmf_add_vi_channel0(uint32_t param, ...)
 	va_end(ap);
 
 	UNUSED(pool_num);
+	priv.vi_pop_timeout = 3000;
 	return _mmf_add_vi_channel(ch, width, height, format, fps, depth, mirror, vflip, fit);
 }
 
