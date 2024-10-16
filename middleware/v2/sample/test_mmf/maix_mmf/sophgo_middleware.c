@@ -39,7 +39,12 @@ extern int ionFree(struct sys_ion_data *para);
 #include "cvi_sns_ctrl.h"
 #include "cvi_ive.h"
 #include "sample_comm.h"
+#ifdef __cplusplus
+#include "sophgo_middleware.hpp"
+#else
 #include "maix_mmf.h"
+#endif
+
 
 
 #ifndef MMF_FUNC_GET_PARAM_METHOD
