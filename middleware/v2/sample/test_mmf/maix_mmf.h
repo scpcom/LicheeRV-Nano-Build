@@ -133,6 +133,11 @@ int mmf_get_wb_mode(int ch);
 int mmf_get_sensor_id(void);
 char* mmf_get_sensor_name(void);
 
+// venc
+int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg);
+int mmf_del_venc_channel(int ch);
+int mmf_del_venc_channel_all();
+
 int mmf_init0(uint32_t param, ...);
 int mmf_deinit0(uint32_t param, ...);
 int mmf_vi_init0(uint32_t param, ...);
