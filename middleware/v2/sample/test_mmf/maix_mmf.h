@@ -11,7 +11,9 @@ typedef struct {
     uint8_t *data[8];
     int data_size[8];
     int count;
-} mmf_h265_stream_t;
+} mmf_stream_t;
+
+#define mmf_h265_stream_t mmf_stream_t
 
 typedef struct {
     uint8_t type;           // 0, jpg; 1, h265; 2, h264
@@ -137,6 +139,9 @@ char* mmf_get_sensor_name(void);
 int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg);
 int mmf_del_venc_channel(int ch);
 int mmf_del_venc_channel_all();
+int mmf_venc_push(int ch, uint8_t *data, int w, int h, int format);
+int mmf_venc_pop(int ch, mmf_stream_t *stream);
+int mmf_venc_free(int ch);
 
 int mmf_init0(uint32_t param, ...);
 int mmf_deinit0(uint32_t param, ...);
