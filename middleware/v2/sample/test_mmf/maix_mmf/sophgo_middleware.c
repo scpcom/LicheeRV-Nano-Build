@@ -151,6 +151,7 @@ typedef struct {
 static priv_t priv;
 static g_priv_t g_priv;
 
+static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
 static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
 
 #define DISP_W	640
@@ -2819,79 +2820,6 @@ int mmf_enc_jpg_deinit(int ch)
 	return s32Ret;
 }
 
-static int _mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
-{
-	int out_ch = ch;
-	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
-		return -1;
-	}
-	if (priv.enc_chn_running[ch]) {
-		return s32Ret;
-	}
-
-	SIZE_S stSize = {(CVI_U32)w, (CVI_U32)h};
-	if (priv.enc_chn_frame[ch] == NULL || priv.enc_chn_cfg[ch].w != w || priv.enc_chn_cfg[ch].h != h || priv.enc_chn_cfg[ch].fmt != format || priv.enc_chn_cfg[ch].jpg_quality != quality) {
-		s32Ret = mmf_rst_venc_channel(ch, w, h, format, quality);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("mmf_rst_venc_channel failed with %d\n", s32Ret);
-			return s32Ret;
-		}
-
-		priv.enc_chn_cfg[ch].w = w;
-		priv.enc_chn_cfg[ch].h = h;
-		priv.enc_chn_cfg[ch].fmt = format;
-		priv.enc_chn_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(priv.enc_chn_vb_id[ch], stSize, (PIXEL_FORMAT_E)format);
-		if (!priv.enc_chn_frame[ch]) {
-			printf("Alloc frame failed!\r\n");
-			return -1;
-		}
-	}
-
-	switch (format) {
-		case PIXEL_FORMAT_RGB_888:
-		{
-			if (priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] != (CVI_U32)w * 3) {
-				for (int h0 = 0; h0 < h; h0 ++) {
-					memcpy((uint8_t *)priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0] + priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] * h0,
-							((uint8_t *)data) + w * h0 * 3, w * 3);
-				}
-			} else {
-				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0], data, w * h * 3);
-			}
-
-			out_ch = 2;
-		}
-		break;
-		case PIXEL_FORMAT_NV21:
-		{
-			if (priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] != (CVI_U32)w) {
-				for (int h0 = 0; h0 < h * 3 / 2; h0 ++) {
-					memcpy((uint8_t *)priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0] + priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] * h0,
-							((uint8_t *)data) + w * h0, w);
-				}
-			} else {
-				uint32_t p0_size = w * h;
-				uint32_t p1_size = w * h / 2;
-				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0], ((uint8_t *)data), p0_size);
-				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[1], ((uint8_t *)data) + p0_size, p1_size);
-			}
-		}
-		break;
-		default: return -1;
-	}
-
-	s32Ret = CVI_VENC_SendFrame(out_ch, priv.enc_chn_frame[ch], 1000);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_SendFrame failed with %d\n", s32Ret);
-		return s32Ret;
-	}
-
-	priv.enc_chn_running[ch] = 1;
-
-	return s32Ret;
-}
-
 int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -2906,7 +2834,7 @@ int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int forma
 		}
 	}
 
-	return _mmf_enc_jpg_push_with_quality(ch, data, w, h, format, quality);
+	return _mmf_venc_push(ch, data, w, h, format, quality);
 }
 
 int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
