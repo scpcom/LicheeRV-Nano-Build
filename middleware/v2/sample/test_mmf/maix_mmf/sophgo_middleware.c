@@ -2769,7 +2769,7 @@ int mmf_enc_jpg_deinit(int ch)
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
 	if (!mmf_enc_jpg_pop(ch, NULL, NULL)) {
-		mmf_enc_jpg_free(ch);
+		mmf_venc_free(ch);
 	}
 
 	switch (priv.enc_chn_cfg[ch].fmt) {
@@ -2890,21 +2890,7 @@ int mmf_enc_jpg_pop(int ch, uint8_t **data, int *size)
 
 int mmf_enc_jpg_free(int ch)
 {
-	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (!priv.enc_chn_running[ch]) {
-		return s32Ret;
-	}
-
-	if (priv.enc_chn_stream[ch].pstPack)
-		free(priv.enc_chn_stream[ch].pstPack);
-	s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_chn_stream[ch]);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
-		return s32Ret;
-	}
-
-	priv.enc_chn_running[ch] = 0;
-	return s32Ret;
+	return mmf_venc_free(ch);
 }
 
 static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
@@ -3087,9 +3073,9 @@ int mmf_enc_h265_deinit(int ch)
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
-	mmf_h265_stream_t stream;
-	if (!mmf_enc_h265_pop(ch, &stream)) {
-		mmf_enc_h265_free(ch);
+	mmf_stream_t stream;
+	if (!mmf_venc_pop(ch, &stream)) {
+		mmf_venc_free(ch);
 	}
 
 	s32Ret = CVI_VENC_StopRecvFrame(ch);
@@ -3320,7 +3306,7 @@ int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
 
 int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream)
 {
-	return mmf_venc_pop(ch, stream);
+	return mmf_venc_pop(ch, (mmf_stream_t *)stream);
 }
 
 int mmf_enc_h265_free(int ch)
