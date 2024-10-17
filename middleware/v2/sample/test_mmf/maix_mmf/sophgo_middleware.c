@@ -3328,6 +3328,41 @@ int mmf_enc_h265_free(int ch)
 	return mmf_venc_free(ch);
 }
 
+int mmf_venc_unused_channel(void) {
+	for (int i = 0; i < MMF_ENC_MAX_CHN; i++) {
+		if (!priv.enc_chn_is_init[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+int mmf_venc_is_used(int ch)
+{
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+
+	return priv.enc_chn_running[ch];
+}
+
+int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg)
+{
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_running[ch]) {
+		return -1;
+	}
+	if (!cfg) {
+		return -1;
+	}
+
+	memcpy(cfg, &priv.enc_chn_cfg[ch], sizeof(priv.enc_chn_cfg[ch]));
+
+	return 0;
+}
+
 int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 {
 	if (ch >= MMF_ENC_MAX_CHN) {
