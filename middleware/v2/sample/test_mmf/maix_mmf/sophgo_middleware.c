@@ -3668,6 +3668,19 @@ void mmf_set_vi_vflip(int ch, bool en)
 	g_priv.vi_vflip[ch] = en;
 }
 
+void mmf_get_vo_video_hmirror(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vo_video_hmirror[ch];
+}
+
 void mmf_set_vo_video_hmirror(int ch, bool en)
 {
 	if (ch > MMF_VI_MAX_CHN) {
@@ -3676,6 +3689,19 @@ void mmf_set_vo_video_hmirror(int ch, bool en)
 	}
 
 	g_priv.vo_video_hmirror[ch] = en;
+}
+
+void mmf_get_vo_video_flip(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vo_video_vflip[ch];
 }
 
 void mmf_set_vo_video_flip(int ch, bool en)

@@ -72,6 +72,8 @@ int mmf_del_vo_channel_all(int layer);
 bool mmf_vo_channel_is_open(int layer, int ch);
 void mmf_set_vo_video_hmirror(int ch, bool en);
 void mmf_set_vo_video_flip(int ch, bool en);
+void mmf_get_vo_video_hmirror(int ch, bool *en);
+void mmf_get_vo_video_flip(int ch, bool *en);
 
 // flush vo
 int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit);
