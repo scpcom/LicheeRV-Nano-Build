@@ -151,6 +151,7 @@ typedef struct {
 static priv_t priv;
 static g_priv_t g_priv;
 
+static int mmf_venc_deinit(int ch);
 static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
 static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
 
@@ -2622,6 +2623,8 @@ int mmf_region_frame_push(int ch, void *data, int len)
 
 static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 {
+	VPSS_GRP out_grp = 0;
+
 	if (priv.enc_chn_is_init[ch])
 		return 0;
 
@@ -2691,7 +2694,9 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 
 	switch (cfg->fmt) {
 	case PIXEL_FORMAT_RGB_888:
-		s32Ret = _mmf_vpss_init(2, ch, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, PIXEL_FORMAT_RGB_888, PIXEL_FORMAT_YUV_PLANAR_420, cfg->output_fps, 0, CVI_FALSE, CVI_FALSE, 0);
+		out_grp = 2;
+
+		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, PIXEL_FORMAT_RGB_888, PIXEL_FORMAT_YUV_PLANAR_420, cfg->output_fps, 0, CVI_FALSE, CVI_FALSE, 0);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS init failed with %d\n", s32Ret);
 			CVI_VENC_StopRecvFrame(ch);
@@ -2699,10 +2704,10 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 			return s32Ret;
 		}
 
-		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(2, ch, ch);
+		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(out_grp, ch, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS bind VENC failed with %#x\n", s32Ret);
-			_mmf_vpss_deinit(2, ch);
+			_mmf_vpss_deinit(out_grp, ch);
 			CVI_VENC_StopRecvFrame(ch);
 			CVI_VENC_DestroyChn(ch);
 			return s32Ret;
@@ -2763,61 +2768,7 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 
 int mmf_enc_jpg_deinit(int ch)
 {
-	if (!priv.enc_chn_is_init[ch])
-		return 0;
-
-	CVI_S32 s32Ret = CVI_SUCCESS;
-
-	if (!mmf_enc_jpg_pop(ch, NULL, NULL)) {
-		mmf_venc_free(ch);
-	}
-
-	switch (priv.enc_chn_cfg[ch].fmt) {
-	case PIXEL_FORMAT_RGB_888:
-		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(2, ch, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS unbind VENC failed with %d\n", s32Ret);
-		}
-
-		s32Ret = _mmf_vpss_deinit(2, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS deinit failed with %d\n", s32Ret);
-		}
-		break;
-	case PIXEL_FORMAT_NV21:
-		break;
-	default:
-		break;
-	}
-
-	s32Ret = CVI_VENC_StopRecvFrame(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_StopRecvPic failed with %d\n", s32Ret);
-	}
-
-	s32Ret = CVI_VENC_ResetChn(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_ResetChn vechn[%d] failed with %#x!\n",
-				ch, s32Ret);
-	}
-
-	s32Ret = CVI_VENC_DestroyChn(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_DestroyChn [%d] failed with %d\n", ch, s32Ret);
-	}
-
-	if (priv.enc_chn_frame[ch]) {
-		_mmf_free_frame(priv.enc_chn_frame[ch]);
-		priv.enc_chn_frame[ch] = NULL;
-	}
-
-	priv.enc_chn_cfg[ch].w = 0;
-	priv.enc_chn_cfg[ch].h = 0;
-	priv.enc_chn_cfg[ch].fmt = 0;
-	priv.enc_chn_is_init[ch] = 0;
-	priv.enc_chn_running[ch] = 0;
-
-	return s32Ret;
+	return  mmf_venc_deinit(ch);
 }
 
 int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
@@ -3019,7 +2970,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
 	priv.enc_chn_cfg[ch].w = cfg->w;
 	priv.enc_chn_cfg[ch].h = cfg->h;
-	priv.enc_chn_cfg[ch].fmt = 0;
+	priv.enc_chn_cfg[ch].fmt = cfg->fmt;
 	priv.enc_chn_cfg[ch].jpg_quality = cfg->jpg_quality;
 	priv.enc_chn_running[ch] = 0;
 	priv.enc_chn_is_init[ch] = 1;
@@ -3044,16 +2995,40 @@ int mmf_enc_h265_init(int ch, int w, int h)
 	return _mmf_enc_h265_init(ch, &cfg);
 }
 
-int mmf_enc_h265_deinit(int ch)
+static int mmf_venc_deinit(int ch)
 {
-	if (!priv.enc_chn_is_init[ch])
-		return 0;
-
+	VPSS_GRP out_grp = 0;
 	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_is_init[ch]) {
+		return 0;
+	}
 
 	mmf_stream_t stream;
 	if (!mmf_venc_pop(ch, &stream)) {
 		mmf_venc_free(ch);
+	}
+
+	switch (priv.enc_chn_cfg[ch].fmt) {
+	case PIXEL_FORMAT_RGB_888:
+		out_grp = 2;
+
+		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(out_grp, ch, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS unbind VENC failed with %d\n", s32Ret);
+		}
+
+		s32Ret = _mmf_vpss_deinit(out_grp, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS deinit failed with %d\n", s32Ret);
+		}
+		break;
+	case PIXEL_FORMAT_NV21:
+		break;
+	default:
+		break;
 	}
 
 	s32Ret = CVI_VENC_StopRecvFrame(ch);
@@ -3268,6 +3243,11 @@ int mmf_venc_free(int ch)
 	return s32Ret;
 }
 
+int mmf_enc_h265_deinit(int ch)
+{
+	return mmf_venc_deinit(ch);
+}
+
 int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -3351,14 +3331,7 @@ int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 
 int mmf_del_venc_channel(int ch)
 {
-	if (ch >= MMF_ENC_MAX_CHN)
-		return -1;
-	if (priv.enc_chn_type[ch] == PT_H265)
-		return mmf_enc_h265_deinit(ch);
-	if (priv.enc_chn_type[ch] == PT_JPEG)
-		return mmf_enc_jpg_deinit(ch);
-
-	return -1;
+	return mmf_venc_deinit(ch);
 }
 
 int mmf_del_venc_channel_all()
