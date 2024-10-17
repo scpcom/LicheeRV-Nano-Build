@@ -3855,12 +3855,89 @@ int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h)
 
 int mmf_get_again(int ch, uint32_t *gain)
 {
+	ISP_EXP_INFO_S stExpInfo;
+	memset(&stExpInfo, 0, sizeof(ISP_EXP_INFO_S));
+	CVI_ISP_QueryExposureInfo(ch, &stExpInfo);
+
+	if (gain) {
+		*gain = stExpInfo.u32AGain;
+	}
 	return 0;
 }
 
 int mmf_set_again(int ch, uint32_t gain)
 {
-	return -1;
+	ISP_EXPOSURE_ATTR_S stExpAttr;
+	memset(&stExpAttr, 0, sizeof(ISP_EXPOSURE_ATTR_S));
+	CVI_ISP_GetExposureAttr(ch, &stExpAttr);
+	if (stExpAttr.enOpType == OP_TYPE_MANUAL) {
+		stExpAttr.stManual.enAGainOpType = OP_TYPE_MANUAL;
+		stExpAttr.stManual.u32AGain = gain;
+		CVI_ISP_SetExposureAttr(ch, &stExpAttr);
+		//usleep(100 * 1000);
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int mmf_get_dgain(int ch, uint32_t *gain)
+{
+	ISP_EXP_INFO_S stExpInfo;
+	memset(&stExpInfo, 0, sizeof(ISP_EXP_INFO_S));
+	CVI_ISP_QueryExposureInfo(ch, &stExpInfo);
+
+	if (gain) {
+		*gain = stExpInfo.u32DGain;
+	}
+	return 0;
+}
+
+int mmf_set_dgain(int ch, uint32_t gain)
+{
+	ISP_EXPOSURE_ATTR_S stExpAttr;
+	memset(&stExpAttr, 0, sizeof(ISP_EXPOSURE_ATTR_S));
+	CVI_ISP_GetExposureAttr(ch, &stExpAttr);
+	if (stExpAttr.enOpType == OP_TYPE_MANUAL) {
+		stExpAttr.stManual.enDGainOpType = OP_TYPE_MANUAL;
+		stExpAttr.stManual.u32DGain = gain;
+		CVI_ISP_SetExposureAttr(ch, &stExpAttr);
+		//usleep(100 * 1000);
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int mmf_get_ispdgain(int ch, uint32_t *gain)
+{
+	ISP_EXP_INFO_S stExpInfo;
+	memset(&stExpInfo, 0, sizeof(ISP_EXP_INFO_S));
+	CVI_ISP_QueryExposureInfo(ch, &stExpInfo);
+
+	if (gain) {
+		*gain = stExpInfo.u32ISPDGain;
+	}
+	return 0;
+}
+
+int mmf_set_ispdgain(int ch, uint32_t gain)
+{
+	ISP_EXPOSURE_ATTR_S stExpAttr;
+	memset(&stExpAttr, 0, sizeof(ISP_EXPOSURE_ATTR_S));
+	CVI_ISP_GetExposureAttr(ch, &stExpAttr);
+	if (stExpAttr.enOpType == OP_TYPE_MANUAL) {
+		stExpAttr.stManual.enISPDGainOpType = OP_TYPE_MANUAL;
+		stExpAttr.stManual.u32ISPDGain = gain;
+		CVI_ISP_SetExposureAttr(ch, &stExpAttr);
+		//usleep(100 * 1000);
+	} else {
+		return -1;
+	}
+
+	return 0;
 }
 
 int mmf_set_wb_mode(int ch, int mode)

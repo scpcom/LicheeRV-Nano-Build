@@ -122,6 +122,10 @@ int mmf_get_iso_num(int ch, uint32_t *iso_num);
 int mmf_set_iso_num(int ch, uint32_t iso_num);
 int mmf_get_again(int ch, uint32_t *gain);
 int mmf_set_again(int ch, uint32_t gain);   // gain = [0x400, 0x7FFFFFFF]
+int mmf_get_dgain(int ch, uint32_t *gain);
+int mmf_set_dgain(int ch, uint32_t gain);   // gain = [0x400, 0x7FFFFFFF]
+int mmf_get_ispdgain(int ch, uint32_t *gain);
+int mmf_set_ispdgain(int ch, uint32_t gain); // gain = [0x400, 0x7FFFFFFF]
 int mmf_get_exptime_and_iso(int ch, uint32_t *exptime, uint32_t *iso_num);
 int mmf_set_exptime_and_iso(int ch, uint32_t exptime, uint32_t iso_num);
 void mmf_set_constrast(int ch, uint32_t val);
