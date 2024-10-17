@@ -2851,35 +2851,13 @@ int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 
 int mmf_enc_jpg_pop(int ch, uint8_t **data, int *size)
 {
-	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (!priv.enc_chn_running[ch]) {
-		return s32Ret;
-	}
-
-	priv.enc_chn_stream[ch].pstPack = (VENC_PACK_S *)malloc(sizeof(VENC_PACK_S) * 1);
-	if (!priv.enc_chn_stream[ch].pstPack) {
-		printf("Malloc failed!\r\n");
-		return -1;
-	}
-
-	VENC_CHN_STATUS_S stStatus;
-	s32Ret = CVI_VENC_QueryStatus(ch, &stStatus);
+	CVI_S32 s32Ret = mmf_venc_pop(ch, NULL);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_QueryStatus failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
-	if (stStatus.u32CurPacks > 0) {
-		s32Ret = CVI_VENC_GetStream(ch, &priv.enc_chn_stream[ch], 1000);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("CVI_VENC_GetStream failed with %#x\n", s32Ret);
-			return s32Ret;
-		}
-	} else {
-		printf("CVI_VENC_QueryStatus find not pack\r\n");
+	if (!priv.enc_chn_stream[ch].pstPack)
 		return -1;
-	}
-
 	if (data)
 		*data = priv.enc_chn_stream[ch].pstPack[0].pu8Addr;
 	if (size)
@@ -3240,11 +3218,13 @@ int mmf_venc_pop(int ch, mmf_stream_t *stream)
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetStream failed with %#x\n", s32Ret);
 			free(priv.enc_chn_stream[ch].pstPack);
+			priv.enc_chn_stream[ch].pstPack = NULL;
 			return s32Ret;
 		}
 	} else {
 		printf("CVI_VENC_QueryStatus find not pack\r\n");
 		free(priv.enc_chn_stream[ch].pstPack);
+		priv.enc_chn_stream[ch].pstPack = NULL;
 		return -1;
 	}
 
@@ -3253,6 +3233,7 @@ int mmf_venc_pop(int ch, mmf_stream_t *stream)
 		if (stream->count > 8) {
 			printf("pack count is too large! cnt:%d\r\n", stream->count);
 			free(priv.enc_chn_stream[ch].pstPack);
+			priv.enc_chn_stream[ch].pstPack = NULL;
 			return -1;
 		}
 		for (int i = 0; i < stream->count; i++) {
