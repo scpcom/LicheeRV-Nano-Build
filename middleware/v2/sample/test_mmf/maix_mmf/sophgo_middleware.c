@@ -3804,7 +3804,7 @@ void mmf_set_vi_vflip(int ch, bool en)
 
 void mmf_get_vo_video_hmirror(int ch, bool *en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
@@ -3817,7 +3817,7 @@ void mmf_get_vo_video_hmirror(int ch, bool *en)
 
 void mmf_set_vo_video_hmirror(int ch, bool en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
@@ -3827,7 +3827,7 @@ void mmf_set_vo_video_hmirror(int ch, bool en)
 
 void mmf_get_vo_video_flip(int ch, bool *en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
@@ -3840,7 +3840,7 @@ void mmf_get_vo_video_flip(int ch, bool *en)
 
 void mmf_set_vo_video_flip(int ch, bool en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
