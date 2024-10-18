@@ -315,14 +315,14 @@ static int _free_leak_memory_of_ion(void)
 			if (strcmp(buffer_name, "VI_DMA_BUF")
 				&& strcmp(buffer_name, "ISP_SHARED_BUFFER_0"))
 				continue;
-			struct sys_ion_data2 ion_data = {
-				.cached = 1,
-				.dmabuf_fd = (uint32_t)-1,
-			};
+			struct sys_ion_data2 ion_data;
 
             alloc_buf_size = atoi(alloc_buf_size_str);
             phy_addr = (unsigned int)strtol(phy_addr_str, NULL, 16);
 
+			memset(&ion_data, 0, sizeof(ion_data));
+			ion_data.cached = 1;
+			ion_data.dmabuf_fd = (uint32_t)-1;
 			ion_data.size = alloc_buf_size;
 			ion_data.addr_p = phy_addr;
 			memset(ion_data.name, 0, sizeof(ion_data.name));
