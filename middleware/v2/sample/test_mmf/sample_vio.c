@@ -75,7 +75,8 @@ static uint64_t _get_time_us(void)
 
 #define OLED_DISABLE 	0
 #define OLED_ENABLE		1
-#define oled_i2c_addr	0x3D
+#define oled_i2c_bus		5	// 4.1.0 sdk: 3
+#define oled_i2c_addr		0x3D
 #define OLED_CMD		0x00
 #define OLED_DATA		0x40
 
@@ -87,7 +88,9 @@ int oled_i2c_init(uint8_t _EN, int * oled_dev)
 	system("devmem 0x030010E4 32 0x2");
 	int ret; 
 	if(_EN) {
-		*oled_dev = open("/dev/i2c-3", O_RDWR, 0600);
+		char i2c_dev[12];
+		sprintf(i2c_dev, "/dev/i2c-%hhd", oled_i2c_bus);
+		*oled_dev = open(i2c_dev, O_RDWR, 0600);
 		if (*oled_dev < 0) {
 			CVI_TRACE_SNS(CVI_DBG_ERR, "Open /dev/cvi_i2c_drv-3 error!\n");
 			return CVI_FAILURE;
