@@ -2867,7 +2867,8 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	{
-		VENC_H265_TRANS_S h265Trans = {0};
+		VENC_H265_TRANS_S h265Trans;
+		memset(&h265Trans, 0, sizeof(h265Trans));
 		s32Ret = CVI_VENC_GetH265Trans(ch, &h265Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH265Trans failed with %d\n", s32Ret);
@@ -2883,7 +2884,8 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	{
-		VENC_H265_VUI_S h265Vui = {0};
+		VENC_H265_VUI_S h265Vui;
+		memset(&h265Vui, 0, sizeof(h265Vui));
 		s32Ret = CVI_VENC_GetH265Vui(ch, &h265Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH265Vui failed with %d\n", s32Ret);
