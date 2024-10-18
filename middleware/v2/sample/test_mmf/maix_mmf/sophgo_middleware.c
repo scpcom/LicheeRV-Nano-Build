@@ -66,7 +66,7 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_VB_VI_ID			0
 #define MMF_VB_VO_ID			1
 #define MMF_VB_USER_ID			2
-#define MMF_VB_ENC_H265_ID		3
+#define MMF_VB_ENC_H26X_ID		3
 #define MMF_VB_ENC_JPEG_ID		4
 
 #if VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN
@@ -138,7 +138,7 @@ typedef struct {
 } priv_t;
 
 typedef struct {
-	int enc_h265_enable : 1;
+	int enc_h26x_enable : 1;
 	int enc_jpg_enable : 1;
 	bool vi_hmirror[MMF_VI_MAX_CHN];
 	bool vi_vflip[MMF_VI_MAX_CHN];
@@ -173,11 +173,11 @@ static void priv_param_init(void)
 	priv.vb_conf.astCommPool[MMF_VB_USER_ID].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
 
-	g_priv.enc_h265_enable = 1;
-	if (g_priv.enc_h265_enable) {
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H265_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H265_ID].u32BlkCnt = 1;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H265_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+	g_priv.enc_h26x_enable = 1;
+	if (g_priv.enc_h26x_enable) {
+		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
+		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
 	}
 
@@ -2842,6 +2842,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	stVencChnAttr.stVencAttr.bIsoSendFrmEn = CVI_TRUE;
 	stVencChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
 	stVencChnAttr.stGopAttr.stNormalP.s32IPQpDelta = 2;
+
 	stVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
 	stVencChnAttr.stRcAttr.stH265Cbr.u32Gop = cfg->gop;
 	stVencChnAttr.stRcAttr.stH265Cbr.u32StatTime = 2;
@@ -2849,6 +2850,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	stVencChnAttr.stRcAttr.stH265Cbr.fr32DstFrameRate = cfg->output_fps;
 	stVencChnAttr.stRcAttr.stH265Cbr.u32BitRate = cfg->bitrate;
 	stVencChnAttr.stRcAttr.stH265Cbr.bVariFpsEn = 0;
+
 	s32Ret = CVI_VENC_CreateChn(ch, &stVencChnAttr);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_CreateChn [%d] failed with %d\n", ch, s32Ret);
@@ -2965,7 +2967,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	priv.enc_chn_type[ch] = PT_H265;
-	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H265_ID;
+	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H26X_ID;
 
 	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
 	priv.enc_chn_cfg[ch].w = cfg->w;
@@ -2994,6 +2996,196 @@ int mmf_enc_h265_init(int ch, int w, int h)
 
 	return _mmf_enc_h265_init(ch, &cfg);
 }
+
+static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
+{
+	if (priv.enc_chn_is_init[ch])
+		return 0;
+
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	VENC_CHN_ATTR_S stVencChnAttr;
+	memset(&stVencChnAttr, 0, sizeof(VENC_CHN_ATTR_S));
+	stVencChnAttr.stVencAttr.enType = PT_H264;
+	stVencChnAttr.stVencAttr.u32MaxPicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32MaxPicHeight = cfg->h;
+	stVencChnAttr.stVencAttr.u32BufSize = 1024 * 1024;	// 1024Kb
+	stVencChnAttr.stVencAttr.bByFrame = 1;
+	stVencChnAttr.stVencAttr.u32PicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32PicHeight = cfg->h;
+	stVencChnAttr.stVencAttr.bEsBufQueueEn = CVI_TRUE;
+	stVencChnAttr.stVencAttr.bIsoSendFrmEn = CVI_TRUE; // ???
+	stVencChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
+	stVencChnAttr.stGopAttr.stNormalP.s32IPQpDelta = 2;
+
+	VENC_H264_CBR_S *pstH264Cbr = &stVencChnAttr.stRcAttr.stH264Cbr;
+
+	stVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
+	pstH264Cbr->u32Gop = cfg->gop;
+	pstH264Cbr->u32StatTime = 2;
+	pstH264Cbr->u32SrcFrameRate = cfg->intput_fps;
+	pstH264Cbr->fr32DstFrameRate = cfg->output_fps;
+	pstH264Cbr->u32BitRate = cfg->bitrate;
+	pstH264Cbr->bVariFpsEn = 0;
+
+	s32Ret = CVI_VENC_CreateChn(ch, &stVencChnAttr);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VENC_CreateChn [%d] failed with %d\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+	VENC_PARAM_MOD_S stModParam;
+	CVI_VENC_GetModParam(&stModParam);
+	stModParam.stH264eModParam.enH264eVBSource = VB_SOURCE_COMMON;
+	stModParam.stH264eModParam.bSingleEsBuf = true;
+	stModParam.stH264eModParam.u32SingleEsBufSize = 1024 * 1024;
+	stModParam.stH264eModParam.u32UserDataMaxLen = 3072;
+	CVI_VENC_SetModParam(&stModParam);
+
+	VENC_RECV_PIC_PARAM_S stRecvParam;
+	stRecvParam.s32RecvPicNum = -1;
+	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VENC_StartRecvPic failed with %d\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	{
+		VENC_H264_TRANS_S h264Trans = {0};
+		s32Ret = CVI_VENC_GetH264Trans(ch, &h264Trans);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetH264Trans failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		//h264Trans.cb_qp_offset = 0;
+		//h264Trans.cr_qp_offset = 0;
+		h264Trans.chroma_qp_index_offset = 0;
+
+		s32Ret = CVI_VENC_SetH264Trans(ch, &h264Trans);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetH264Trans failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	{
+		VENC_H264_VUI_S h264Vui = {0};
+		s32Ret = CVI_VENC_GetH264Vui(ch, &h264Vui);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetH264Vui failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		h264Vui.stVuiAspectRatio.aspect_ratio_info_present_flag = 0;
+		h264Vui.stVuiAspectRatio.aspect_ratio_idc = 1;
+		h264Vui.stVuiAspectRatio.overscan_info_present_flag = 0;
+		h264Vui.stVuiAspectRatio.overscan_appropriate_flag = 0;
+		h264Vui.stVuiAspectRatio.sar_width = 1;
+		h264Vui.stVuiAspectRatio.sar_height = 1;
+		h264Vui.stVuiTimeInfo.timing_info_present_flag = 1;
+		h264Vui.stVuiTimeInfo.num_units_in_tick = 1;
+		h264Vui.stVuiTimeInfo.time_scale = 30;
+		//h264Vui.stVuiTimeInfo.num_ticks_poc_diff_one_minus1 = 1;
+		h264Vui.stVuiVideoSignal.video_signal_type_present_flag = 0;
+		h264Vui.stVuiVideoSignal.video_format = 5;
+		h264Vui.stVuiVideoSignal.video_full_range_flag = 0;
+		h264Vui.stVuiVideoSignal.colour_description_present_flag = 0;
+		h264Vui.stVuiVideoSignal.colour_primaries = 2;
+		h264Vui.stVuiVideoSignal.transfer_characteristics = 2;
+		h264Vui.stVuiVideoSignal.matrix_coefficients = 2;
+		h264Vui.stVuiBitstreamRestric.bitstream_restriction_flag = 0;
+
+		// _mmf_dump_venc_h264_vui(&h264Vui);
+
+		s32Ret = CVI_VENC_SetH264Vui(ch, &h264Vui);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetH264Vui failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	// rate control
+	{
+		VENC_RC_PARAM_S stRcParam;
+		s32Ret = CVI_VENC_GetRcParam(ch, &stRcParam);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetRcParam failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+		stRcParam.s32FirstFrameStartQp = 35;
+		stRcParam.stParamH264Cbr.u32MinIprop = 1;
+		stRcParam.stParamH264Cbr.u32MaxIprop = 10;
+		stRcParam.stParamH264Cbr.u32MaxQp = 51;
+		stRcParam.stParamH264Cbr.u32MinQp = 20;
+		stRcParam.stParamH264Cbr.u32MaxIQp = 51;
+		stRcParam.stParamH264Cbr.u32MinIQp = 20;
+
+		// _mmf_dump_venc_rc_param(&stRcParam);
+
+		s32Ret = CVI_VENC_SetRcParam(ch, &stRcParam);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetRcParam failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	// frame lost set
+	{
+		VENC_FRAMELOST_S stFL;
+		s32Ret = CVI_VENC_GetFrameLostStrategy(ch, &stFL);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetFrameLostStrategy failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+		stFL.enFrmLostMode = FRMLOST_PSKIP;
+
+		// _mmf_dump_venc_framelost(&stFL);
+
+		s32Ret = CVI_VENC_SetFrameLostStrategy(ch, &stFL);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetFrameLostStrategy failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	if (priv.enc_chn_frame[ch]) {
+		_mmf_free_frame(priv.enc_chn_frame[ch]);
+		priv.enc_chn_frame[ch] = NULL;
+	}
+
+	priv.enc_chn_type[ch] = PT_H264;
+	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H26X_ID;
+
+	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
+	priv.enc_chn_cfg[ch].w = cfg->w;
+	priv.enc_chn_cfg[ch].h = cfg->h;
+	priv.enc_chn_cfg[ch].fmt = cfg->fmt;
+	priv.enc_chn_cfg[ch].jpg_quality = cfg->jpg_quality;
+	priv.enc_chn_running[ch] = 0;
+	priv.enc_chn_is_init[ch] = 1;
+
+	return s32Ret;
+}
+
+#if 0
+int mmf_enc_h264_init(int ch, int w, int h)
+{
+	mmf_venc_cfg_t cfg = {
+		.type = 2,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = PIXEL_FORMAT_NV21,
+		.jpg_quality = 0,       // unused
+		.gop = 50,
+		.intput_fps = 30,
+		.output_fps = 30,
+		.bitrate = 3000,
+	};
+
+	return _mmf_enc_h264_init(ch, &cfg);
+}
+#endif
 
 static int mmf_venc_deinit(int ch)
 {
@@ -3322,6 +3514,8 @@ int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 	}
 	if (cfg->type == 1)
 		return _mmf_enc_h265_init(ch, cfg);
+	if (cfg->type == 2)
+		return _mmf_enc_h264_init(ch, cfg);
 	if (cfg->type == 4)
 		return _mmf_enc_jpg_init(ch, cfg);
 
