@@ -11,7 +11,9 @@ typedef struct {
     uint8_t *data[8];
     int data_size[8];
     int count;
-} mmf_h265_stream_t;
+} mmf_stream_t;
+
+#define mmf_h265_stream_t mmf_stream_t
 
 typedef struct {
     uint8_t type;           // 0, jpg; 1, h265; 2, h264
@@ -55,6 +57,7 @@ void mmf_set_vi_hmirror(int ch, bool en);
 void mmf_set_vi_vflip(int ch, bool en);
 void mmf_get_vi_hmirror(int ch, bool *en);
 void mmf_get_vi_vflip(int ch, bool *en);
+void mmf_vi_set_pop_timeout(int ms);
 
 // get vi frame
 int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int *format);
@@ -69,6 +72,8 @@ int mmf_del_vo_channel_all(int layer);
 bool mmf_vo_channel_is_open(int layer, int ch);
 void mmf_set_vo_video_hmirror(int ch, bool en);
 void mmf_set_vo_video_flip(int ch, bool en);
+void mmf_get_vo_video_hmirror(int ch, bool *en);
+void mmf_get_vo_video_flip(int ch, bool *en);
 
 // flush vo
 int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit);
@@ -117,6 +122,10 @@ int mmf_get_iso_num(int ch, uint32_t *iso_num);
 int mmf_set_iso_num(int ch, uint32_t iso_num);
 int mmf_get_again(int ch, uint32_t *gain);
 int mmf_set_again(int ch, uint32_t gain);   // gain = [0x400, 0x7FFFFFFF]
+int mmf_get_dgain(int ch, uint32_t *gain);
+int mmf_set_dgain(int ch, uint32_t gain);   // gain = [0x400, 0x7FFFFFFF]
+int mmf_get_ispdgain(int ch, uint32_t *gain);
+int mmf_set_ispdgain(int ch, uint32_t gain); // gain = [0x400, 0x7FFFFFFF]
 int mmf_get_exptime_and_iso(int ch, uint32_t *exptime, uint32_t *iso_num);
 int mmf_set_exptime_and_iso(int ch, uint32_t exptime, uint32_t iso_num);
 void mmf_set_constrast(int ch, uint32_t val);
@@ -131,6 +140,17 @@ int mmf_get_wb_mode(int ch);
 // sensor info
 int mmf_get_sensor_id(void);
 char* mmf_get_sensor_name(void);
+
+// venc
+int mmf_venc_unused_channel(void);
+int mmf_venc_is_used(int ch);
+int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg);
+int mmf_del_venc_channel(int ch);
+int mmf_del_venc_channel_all();
+int mmf_venc_push(int ch, uint8_t *data, int w, int h, int format);
+int mmf_venc_pop(int ch, mmf_stream_t *stream);
+int mmf_venc_free(int ch);
+int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg);
 
 int mmf_init0(uint32_t param, ...);
 int mmf_deinit0(uint32_t param, ...);

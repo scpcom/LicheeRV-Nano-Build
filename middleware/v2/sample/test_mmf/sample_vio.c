@@ -2405,6 +2405,8 @@ static int _test_vi_venc_h265_rtsp(void)
 		return -1;
 	}
 
+	mmf_vi_set_pop_timeout(100);
+
 	printf("rtsp://%s:%d/live\n", rtsp_get_server_ip(), rtsp_get_server_port());
 
 	uint64_t start = _get_time_us();

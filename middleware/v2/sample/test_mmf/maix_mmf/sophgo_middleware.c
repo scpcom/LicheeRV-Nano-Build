@@ -39,7 +39,12 @@ extern int ionFree(struct sys_ion_data *para);
 #include "cvi_sns_ctrl.h"
 #include "cvi_ive.h"
 #include "sample_comm.h"
+#ifdef __cplusplus
+#include "sophgo_middleware.hpp"
+#else
 #include "maix_mmf.h"
+#endif
+
 
 
 #ifndef MMF_FUNC_GET_PARAM_METHOD
@@ -49,6 +54,7 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_FUNC_GET_PARAM_NUM(x)       ((x & 0xff))
 #endif
 
+#define MMF_ENC_MAX_CHN			2
 #define MMF_VI_MAX_CHN 			2		// manually limit the max channel number of vi
 #define MMF_VO_VIDEO_MAX_CHN 	1		// manually limit the max channel number of vo
 #define MMF_VO_OSD_MAX_CHN 		1
@@ -60,7 +66,7 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_VB_VI_ID			0
 #define MMF_VB_VO_ID			1
 #define MMF_VB_USER_ID			2
-#define MMF_VB_ENC_H265_ID		3
+#define MMF_VB_ENC_H26X_ID		3
 #define MMF_VB_ENC_JPEG_ID		4
 
 #if VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN
@@ -70,6 +76,7 @@ typedef struct {
 	int mmf_used_cnt;
 	PIXEL_FORMAT_E vi_format;
 	PIXEL_FORMAT_E vi_vpss_format;
+	int vi_pop_timeout;
 	int vo_rotate;	// 90, 180, 270
 	bool vi_is_inited;
 	bool vi_chn_is_inited[MMF_VI_MAX_CHN];
@@ -109,14 +116,13 @@ typedef struct {
 	int rgn_canvas_h[MMF_RGN_MAX_NUM];
 	int rgn_canvas_format[MMF_RGN_MAX_NUM];
 
-	int enc_jpg_is_init;
-	VENC_STREAM_S enc_jpeg_frame;
-	int enc_jpg_frame_w;
-	int enc_jpg_frame_h;
-	int enc_jpg_frame_fmt;
-	int enc_jpg_quality;
-	int enc_jpg_running;
-	VIDEO_FRAME_INFO_S *enc_jpg_frame;
+	int enc_chn_type[MMF_ENC_MAX_CHN];
+	int enc_chn_vb_id[MMF_ENC_MAX_CHN];
+	int enc_chn_is_init[MMF_ENC_MAX_CHN];
+	int enc_chn_running[MMF_ENC_MAX_CHN];
+	VIDEO_FRAME_INFO_S *enc_chn_frame[MMF_ENC_MAX_CHN];
+	VENC_STREAM_S enc_chn_stream[MMF_ENC_MAX_CHN];
+	mmf_venc_cfg_t enc_chn_cfg[MMF_ENC_MAX_CHN];
 
 	int vb_of_vi_is_config : 1;
 	int vb_of_vo_is_config : 1;
@@ -128,19 +134,11 @@ typedef struct {
 	int vb_size_of_private;
 	int vb_count_of_private;
 
-	int enc_h265_is_init : 1;
-	int enc_h265_running : 1;
-	VIDEO_FRAME_INFO_S *enc_h265_video_frame;
-	VENC_STREAM_S enc_h265_stream;
-	int enc_h265_frame_w;
-	int enc_h265_frame_h;
-	int enc_h265_frame_fmt;
-
 	SAMPLE_SNS_TYPE_E sensor_type;
 } priv_t;
 
 typedef struct {
-	int enc_h265_enable : 1;
+	int enc_h26x_enable : 1;
 	int enc_jpg_enable : 1;
 	bool vi_hmirror[MMF_VI_MAX_CHN];
 	bool vi_vflip[MMF_VI_MAX_CHN];
@@ -153,12 +151,16 @@ typedef struct {
 static priv_t priv;
 static g_priv_t g_priv;
 
+static int mmf_venc_deinit(int ch);
+static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
+static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
+
 #define DISP_W	640
 #define DISP_H	480
 static void priv_param_init(void)
 {
+	priv.vi_pop_timeout = 100;
 	priv.vo_rotate = 90;
-	priv.enc_jpg_quality = 80;
 
 	priv.vb_conf.u32MaxPoolCnt = 1;
 	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
@@ -171,11 +173,11 @@ static void priv_param_init(void)
 	priv.vb_conf.astCommPool[MMF_VB_USER_ID].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
 
-	g_priv.enc_h265_enable = 1;
-	if (g_priv.enc_h265_enable) {
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H265_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H265_ID].u32BlkCnt = 1;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H265_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+	g_priv.enc_h26x_enable = 1;
+	if (g_priv.enc_h26x_enable) {
+		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
+		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
 	}
 
@@ -1060,8 +1062,7 @@ int mmf_deinit(void) {
 
 		mmf_del_vi_channel_all();
 		mmf_del_vo_channel_all(0);
-		mmf_enc_jpg_deinit(0);
-		mmf_enc_h265_deinit(0);
+		mmf_del_venc_channel_all();
 		mmf_vi_deinit();
 		mmf_del_region_channel_all();
 		_mmf_deinit();
@@ -1478,7 +1479,7 @@ int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int
 
 	int ret = -1;
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
-	if (CVI_VPSS_GetChnFrame(0, ch, frame, 100) == 0) {
+	if (CVI_VPSS_GetChnFrame(0, ch, frame, priv.vi_pop_timeout) == 0) {
         int image_size = frame->stVFrame.u32Length[0]
                         + frame->stVFrame.u32Length[1]
 				        + frame->stVFrame.u32Length[2];
@@ -2620,18 +2621,20 @@ int mmf_region_frame_push(int ch, void *data, int len)
 	return s32Ret;
 }
 
-int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
+static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 {
-	if (priv.enc_jpg_is_init)
+	VPSS_GRP out_grp = 0;
+
+	if (priv.enc_chn_is_init[ch])
 		return 0;
 
-	if (quality <= 50) {
+	if ((int8_t)cfg->jpg_quality <= 50) {
 		printf("quality range is (50, 100]\n");
 		return -1;
 	}
 
-	if ((format == PIXEL_FORMAT_RGB_888 && w * h * 3 > 640 * 480 * 3)
-		|| (format == PIXEL_FORMAT_RGB_888 && w * h * 3 / 2 > 2560 * 1440 * 3 / 2)) {
+	if ((cfg->fmt == PIXEL_FORMAT_RGB_888 && cfg->w * cfg->h * 3 > 640 * 480 * 3)
+		|| (cfg->fmt == PIXEL_FORMAT_RGB_888 && cfg->w * cfg->h * 3 / 2 > 2560 * 1440 * 3 / 2)) {
 		printf("image size is too large, for NV21, maximum resolution 2560x1440, for RGB888, maximum resolution 640x480!\n");
 		return -1;
 	}
@@ -2641,10 +2644,10 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 	VENC_CHN_ATTR_S stVencChnAttr;
 	memset(&stVencChnAttr, 0, sizeof(VENC_CHN_ATTR_S));
 	stVencChnAttr.stVencAttr.enType = PT_JPEG;
-	stVencChnAttr.stVencAttr.u32MaxPicWidth = w;
-	stVencChnAttr.stVencAttr.u32MaxPicHeight = h;
-	stVencChnAttr.stVencAttr.u32PicWidth = w;
-	stVencChnAttr.stVencAttr.u32PicHeight = h;
+	stVencChnAttr.stVencAttr.u32MaxPicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32MaxPicHeight = cfg->h;
+	stVencChnAttr.stVencAttr.u32PicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32PicHeight = cfg->h;
 	stVencChnAttr.stVencAttr.bEsBufQueueEn = CVI_FALSE;
 	stVencChnAttr.stVencAttr.bIsoSendFrmEn = CVI_FALSE;
 	stVencChnAttr.stVencAttr.bByFrame = 1;
@@ -2681,7 +2684,7 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 		CVI_VENC_DestroyChn(ch);
 		return s32Ret;
 	}
-	stJpegParam.u32Qfactor = quality;
+	stJpegParam.u32Qfactor = cfg->jpg_quality;
 	s32Ret = CVI_VENC_SetJpegParam(ch, &stJpegParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_SetJpegParam failed with %#x\n", s32Ret);
@@ -2689,9 +2692,11 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 		return s32Ret;
 	}
 
-	switch (format) {
+	switch (cfg->fmt) {
 	case PIXEL_FORMAT_RGB_888:
-		s32Ret = _mmf_vpss_init(2, ch, (SIZE_S){(CVI_U32)w, (CVI_U32)h}, (SIZE_S){(CVI_U32)w, (CVI_U32)h}, PIXEL_FORMAT_RGB_888, PIXEL_FORMAT_YUV_PLANAR_420, 30, 0, CVI_FALSE, CVI_FALSE, 0);
+		out_grp = 2;
+
+		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, PIXEL_FORMAT_RGB_888, PIXEL_FORMAT_YUV_PLANAR_420, cfg->output_fps, 0, CVI_FALSE, CVI_FALSE, 0);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS init failed with %d\n", s32Ret);
 			CVI_VENC_StopRecvFrame(ch);
@@ -2699,10 +2704,10 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 			return s32Ret;
 		}
 
-		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(2, ch, ch);
+		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(out_grp, ch, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS bind VENC failed with %#x\n", s32Ret);
-			_mmf_vpss_deinit(2, ch);
+			_mmf_vpss_deinit(out_grp, ch);
 			CVI_VENC_StopRecvFrame(ch);
 			CVI_VENC_DestroyChn(ch);
 			return s32Ret;
@@ -2725,218 +2730,101 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 		return CVI_FAILURE;
 	}
 
-	if (priv.enc_jpg_frame) {
-		_mmf_free_frame(priv.enc_jpg_frame);
-		priv.enc_jpg_frame = NULL;
+	if (priv.enc_chn_frame[ch]) {
+		_mmf_free_frame(priv.enc_chn_frame[ch]);
+		priv.enc_chn_frame[ch] = NULL;
 	}
 
-	priv.enc_jpg_frame_w = w;
-	priv.enc_jpg_frame_h = h;
-	priv.enc_jpg_frame_fmt = format;
-	priv.enc_jpg_quality = quality;
-	priv.enc_jpg_is_init = 1;
-	priv.enc_jpg_running = 0;
+	priv.enc_chn_type[ch] = PT_JPEG;
+	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_JPEG_ID;
+
+	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
+	priv.enc_chn_cfg[ch].w = cfg->w;
+	priv.enc_chn_cfg[ch].h = cfg->h;
+	priv.enc_chn_cfg[ch].fmt = cfg->fmt;
+	priv.enc_chn_cfg[ch].jpg_quality = cfg->jpg_quality;
+	priv.enc_chn_is_init[ch] = 1;
+	priv.enc_chn_running[ch] = 0;
 
 	return s32Ret;
+}
+
+int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
+{
+	mmf_venc_cfg_t cfg = {
+		.type = 4,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = format,
+		.jpg_quality = (uint8_t)quality,
+		.gop = 0,	// unused
+		.intput_fps = 30,
+		.output_fps = 30,
+		.bitrate = 0,	// unused
+	};
+
+	return _mmf_enc_jpg_init(ch, &cfg);
 }
 
 int mmf_enc_jpg_deinit(int ch)
 {
-	if (!priv.enc_jpg_is_init)
-		return 0;
-
-	CVI_S32 s32Ret = CVI_SUCCESS;
-
-	if (!mmf_enc_jpg_pop(ch, NULL, NULL)) {
-		mmf_enc_jpg_free(ch);
-	}
-
-	switch (priv.enc_jpg_frame_fmt) {
-	case PIXEL_FORMAT_RGB_888:
-		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(2, ch, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS unbind VENC failed with %d\n", s32Ret);
-		}
-
-		s32Ret = _mmf_vpss_deinit(2, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS deinit failed with %d\n", s32Ret);
-		}
-		break;
-	case PIXEL_FORMAT_NV21:
-		break;
-	default:
-		break;
-	}
-
-	s32Ret = CVI_VENC_StopRecvFrame(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_StopRecvPic failed with %d\n", s32Ret);
-	}
-
-	s32Ret = CVI_VENC_ResetChn(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_ResetChn vechn[%d] failed with %#x!\n",
-				ch, s32Ret);
-	}
-
-	s32Ret = CVI_VENC_DestroyChn(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_DestroyChn [%d] failed with %d\n", ch, s32Ret);
-	}
-
-	if (priv.enc_jpg_frame) {
-		_mmf_free_frame(priv.enc_jpg_frame);
-		priv.enc_jpg_frame = NULL;
-	}
-
-	priv.enc_jpg_frame_w = 0;
-	priv.enc_jpg_frame_h = 0;
-	priv.enc_jpg_frame_fmt = 0;
-	priv.enc_jpg_is_init = 0;
-	priv.enc_jpg_running = 0;
-
-	return s32Ret;
+	return  mmf_venc_deinit(ch);
 }
 
 int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
-	UNUSED(ch);
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (priv.enc_jpg_running) {
-		return s32Ret;
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
 	}
-
-	SIZE_S stSize = {(CVI_U32)w, (CVI_U32)h};
-	if (priv.enc_jpg_frame == NULL || priv.enc_jpg_frame_w != w || priv.enc_jpg_frame_h != h || priv.enc_jpg_frame_fmt != format || priv.enc_jpg_quality != quality) {
-		mmf_enc_jpg_deinit(ch);
+	if (!priv.enc_chn_is_init[ch]) {
 		s32Ret = mmf_enc_jpg_init(ch, w, h, format, quality);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("mmf_enc_jpg_init failed with %d\n", s32Ret);
 			return s32Ret;
 		}
-
-		priv.enc_jpg_frame_w = w;
-		priv.enc_jpg_frame_h = h;
-		priv.enc_jpg_frame_fmt = format;
-		priv.enc_jpg_frame = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_ENC_JPEG_ID, stSize, (PIXEL_FORMAT_E)format);
-		if (!priv.enc_jpg_frame) {
-			printf("Alloc frame failed!\r\n");
-			return -1;
-		}
 	}
 
-	switch (format) {
-		case PIXEL_FORMAT_RGB_888:
-		{
-			if (priv.enc_jpg_frame->stVFrame.u32Stride[0] != (CVI_U32)w * 3) {
-				for (CVI_U32 h = 0; h < priv.enc_jpg_frame->stVFrame.u32Height; h++) {
-					memcpy((uint8_t *)priv.enc_jpg_frame->stVFrame.pu8VirAddr[0] + priv.enc_jpg_frame->stVFrame.u32Stride[0] * h, ((uint8_t *)data) + w * h * 3, w * 3);
-				}
-			} else {
-				memcpy(priv.enc_jpg_frame->stVFrame.pu8VirAddr[0], data, w * h * 3);
-			}
-
-			s32Ret = CVI_VPSS_SendFrame(2, priv.enc_jpg_frame, 1000);
-			if (s32Ret != CVI_SUCCESS) {
-				printf("CVI_VPSS_SendFrame failed with %d\n", s32Ret);
-				return s32Ret;
-			}
-		}
-		break;
-		case PIXEL_FORMAT_NV21:
-			if (priv.enc_jpg_frame->stVFrame.u32Stride[0] != (CVI_U32)w) {
-				for (CVI_U32 h = 0; h < priv.enc_jpg_frame->stVFrame.u32Height * 3 / 2; h ++) {
-					memcpy((uint8_t *)priv.enc_jpg_frame->stVFrame.pu8VirAddr[0] + priv.enc_jpg_frame->stVFrame.u32Stride[0] * h,
-							((uint8_t *)data) + w * h, w);
-				}
-			} else {
-				uint32_t p0_size = w * h;
-				uint32_t p1_size = w * h / 2;
-				memcpy(priv.enc_jpg_frame->stVFrame.pu8VirAddr[0], ((uint8_t *)data), p0_size);
-				memcpy(priv.enc_jpg_frame->stVFrame.pu8VirAddr[1], ((uint8_t *)data) + p0_size, p1_size);
-			}
-
-			s32Ret = CVI_VENC_SendFrame(ch, priv.enc_jpg_frame, 1000);
-			if (s32Ret != CVI_SUCCESS) {
-				printf("CVI_VENC_SendFrame failed with %d\n", s32Ret);
-				return s32Ret;
-			}
-		break;
-		default: return -1;
-	}
-
-	priv.enc_jpg_running = 1;
-
-	return s32Ret;
+	return _mmf_venc_push(ch, data, w, h, format, quality);
 }
 
 int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 {
-	return mmf_enc_jpg_push_with_quality(ch, data, w,h, format, priv.enc_jpg_quality);
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_cfg[ch].jpg_quality) {
+		priv.enc_chn_cfg[ch].jpg_quality = 80;
+	}
+
+	return mmf_enc_jpg_push_with_quality(ch, data, w,h, format, priv.enc_chn_cfg[ch].jpg_quality);
 }
 
 int mmf_enc_jpg_pop(int ch, uint8_t **data, int *size)
 {
-	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (!priv.enc_jpg_running) {
-		return s32Ret;
-	}
-
-	priv.enc_jpeg_frame.pstPack = (VENC_PACK_S *)malloc(sizeof(VENC_PACK_S) * 1);
-	if (!priv.enc_jpeg_frame.pstPack) {
-		printf("Malloc failed!\r\n");
-		return -1;
-	}
-
-	VENC_CHN_STATUS_S stStatus;
-	s32Ret = CVI_VENC_QueryStatus(ch, &stStatus);
+	CVI_S32 s32Ret = mmf_venc_pop(ch, NULL);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_QueryStatus failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
-	if (stStatus.u32CurPacks > 0) {
-		s32Ret = CVI_VENC_GetStream(ch, &priv.enc_jpeg_frame, 1000);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("CVI_VENC_GetStream failed with %#x\n", s32Ret);
-			return s32Ret;
-		}
-	} else {
-		printf("CVI_VENC_QueryStatus find not pack\r\n");
+	if (!priv.enc_chn_stream[ch].pstPack)
 		return -1;
-	}
-
 	if (data)
-		*data = priv.enc_jpeg_frame.pstPack[0].pu8Addr;
+		*data = priv.enc_chn_stream[ch].pstPack[0].pu8Addr;
 	if (size)
-		*size = priv.enc_jpeg_frame.pstPack[0].u32Len;
+		*size = priv.enc_chn_stream[ch].pstPack[0].u32Len;
 
 	return s32Ret;
 }
 
 int mmf_enc_jpg_free(int ch)
 {
-	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (!priv.enc_jpg_running) {
-		return s32Ret;
-	}
-
-	if (priv.enc_jpeg_frame.pstPack)
-		free(priv.enc_jpeg_frame.pstPack);
-	s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_jpeg_frame);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
-		return s32Ret;
-	}
-
-	priv.enc_jpg_running = 0;
-	return s32Ret;
+	return mmf_venc_free(ch);
 }
 
-int mmf_enc_h265_init(int ch, int w, int h)
+static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 {
-	if (priv.enc_h265_is_init)
+	if (priv.enc_chn_is_init[ch])
 		return 0;
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -2944,23 +2832,25 @@ int mmf_enc_h265_init(int ch, int w, int h)
 	VENC_CHN_ATTR_S stVencChnAttr;
 	memset(&stVencChnAttr, 0, sizeof(VENC_CHN_ATTR_S));
 	stVencChnAttr.stVencAttr.enType = PT_H265;
-	stVencChnAttr.stVencAttr.u32MaxPicWidth = w;
-	stVencChnAttr.stVencAttr.u32MaxPicHeight = h;
+	stVencChnAttr.stVencAttr.u32MaxPicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32MaxPicHeight = cfg->h;
 	stVencChnAttr.stVencAttr.u32BufSize = 1024 * 1024;	// 1024Kb
 	stVencChnAttr.stVencAttr.bByFrame = 1;
-	stVencChnAttr.stVencAttr.u32PicWidth = w;
-	stVencChnAttr.stVencAttr.u32PicHeight = h;
+	stVencChnAttr.stVencAttr.u32PicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32PicHeight = cfg->h;
 	stVencChnAttr.stVencAttr.bEsBufQueueEn = CVI_TRUE;
 	stVencChnAttr.stVencAttr.bIsoSendFrmEn = CVI_TRUE;
 	stVencChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
 	stVencChnAttr.stGopAttr.stNormalP.s32IPQpDelta = 2;
+
 	stVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
-	stVencChnAttr.stRcAttr.stH265Cbr.u32Gop = 50;
+	stVencChnAttr.stRcAttr.stH265Cbr.u32Gop = cfg->gop;
 	stVencChnAttr.stRcAttr.stH265Cbr.u32StatTime = 2;
-	stVencChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRate = 30;
-	stVencChnAttr.stRcAttr.stH265Cbr.fr32DstFrameRate = 30;
-	stVencChnAttr.stRcAttr.stH265Cbr.u32BitRate = 3000;
+	stVencChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRate = cfg->intput_fps;
+	stVencChnAttr.stRcAttr.stH265Cbr.fr32DstFrameRate = cfg->output_fps;
+	stVencChnAttr.stRcAttr.stH265Cbr.u32BitRate = cfg->bitrate;
 	stVencChnAttr.stRcAttr.stH265Cbr.bVariFpsEn = 0;
+
 	s32Ret = CVI_VENC_CreateChn(ch, &stVencChnAttr);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_CreateChn [%d] failed with %d\n", ch, s32Ret);
@@ -3071,30 +2961,266 @@ int mmf_enc_h265_init(int ch, int w, int h)
 		}
 	}
 
-	if (priv.enc_h265_video_frame) {
-		_mmf_free_frame(priv.enc_h265_video_frame);
-		priv.enc_h265_video_frame = NULL;
+	if (priv.enc_chn_frame[ch]) {
+		_mmf_free_frame(priv.enc_chn_frame[ch]);
+		priv.enc_chn_frame[ch] = NULL;
 	}
 
-	priv.enc_h265_frame_w = w;
-	priv.enc_h265_frame_h = h;
-	priv.enc_h265_frame_fmt = 0;
-	priv.enc_h265_running = 0;
-	priv.enc_h265_is_init = 1;
+	priv.enc_chn_type[ch] = PT_H265;
+	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H26X_ID;
+
+	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
+	priv.enc_chn_cfg[ch].w = cfg->w;
+	priv.enc_chn_cfg[ch].h = cfg->h;
+	priv.enc_chn_cfg[ch].fmt = cfg->fmt;
+	priv.enc_chn_cfg[ch].jpg_quality = cfg->jpg_quality;
+	priv.enc_chn_running[ch] = 0;
+	priv.enc_chn_is_init[ch] = 1;
 
 	return s32Ret;
 }
 
-int mmf_enc_h265_deinit(int ch)
+int mmf_enc_h265_init(int ch, int w, int h)
 {
-	if (!priv.enc_h265_is_init)
+	mmf_venc_cfg_t cfg = {
+		.type = 1,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = PIXEL_FORMAT_NV21,
+		.jpg_quality = 0,       // unused
+		.gop = 50,
+		.intput_fps = 30,
+		.output_fps = 30,
+		.bitrate = 3000,
+	};
+
+	return _mmf_enc_h265_init(ch, &cfg);
+}
+
+static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
+{
+	if (priv.enc_chn_is_init[ch])
 		return 0;
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
-	mmf_h265_stream_t stream;
-	if (!mmf_enc_h265_pop(ch, &stream)) {
-		mmf_enc_h265_free(ch);
+	VENC_CHN_ATTR_S stVencChnAttr;
+	memset(&stVencChnAttr, 0, sizeof(VENC_CHN_ATTR_S));
+	stVencChnAttr.stVencAttr.enType = PT_H264;
+	stVencChnAttr.stVencAttr.u32MaxPicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32MaxPicHeight = cfg->h;
+	stVencChnAttr.stVencAttr.u32BufSize = 1024 * 1024;	// 1024Kb
+	stVencChnAttr.stVencAttr.bByFrame = 1;
+	stVencChnAttr.stVencAttr.u32PicWidth = cfg->w;
+	stVencChnAttr.stVencAttr.u32PicHeight = cfg->h;
+	stVencChnAttr.stVencAttr.bEsBufQueueEn = CVI_TRUE;
+	stVencChnAttr.stVencAttr.bIsoSendFrmEn = CVI_TRUE; // ???
+	stVencChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
+	stVencChnAttr.stGopAttr.stNormalP.s32IPQpDelta = 2;
+
+	VENC_H264_CBR_S *pstH264Cbr = &stVencChnAttr.stRcAttr.stH264Cbr;
+
+	stVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
+	pstH264Cbr->u32Gop = cfg->gop;
+	pstH264Cbr->u32StatTime = 2;
+	pstH264Cbr->u32SrcFrameRate = cfg->intput_fps;
+	pstH264Cbr->fr32DstFrameRate = cfg->output_fps;
+	pstH264Cbr->u32BitRate = cfg->bitrate;
+	pstH264Cbr->bVariFpsEn = 0;
+
+	s32Ret = CVI_VENC_CreateChn(ch, &stVencChnAttr);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VENC_CreateChn [%d] failed with %d\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+	VENC_PARAM_MOD_S stModParam;
+	CVI_VENC_GetModParam(&stModParam);
+	stModParam.stH264eModParam.enH264eVBSource = VB_SOURCE_COMMON;
+	stModParam.stH264eModParam.bSingleEsBuf = true;
+	stModParam.stH264eModParam.u32SingleEsBufSize = 1024 * 1024;
+	stModParam.stH264eModParam.u32UserDataMaxLen = 3072;
+	CVI_VENC_SetModParam(&stModParam);
+
+	VENC_RECV_PIC_PARAM_S stRecvParam;
+	stRecvParam.s32RecvPicNum = -1;
+	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VENC_StartRecvPic failed with %d\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	{
+		VENC_H264_TRANS_S h264Trans = {0};
+		s32Ret = CVI_VENC_GetH264Trans(ch, &h264Trans);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetH264Trans failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		//h264Trans.cb_qp_offset = 0;
+		//h264Trans.cr_qp_offset = 0;
+		h264Trans.chroma_qp_index_offset = 0;
+
+		s32Ret = CVI_VENC_SetH264Trans(ch, &h264Trans);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetH264Trans failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	{
+		VENC_H264_VUI_S h264Vui = {0};
+		s32Ret = CVI_VENC_GetH264Vui(ch, &h264Vui);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetH264Vui failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		h264Vui.stVuiAspectRatio.aspect_ratio_info_present_flag = 0;
+		h264Vui.stVuiAspectRatio.aspect_ratio_idc = 1;
+		h264Vui.stVuiAspectRatio.overscan_info_present_flag = 0;
+		h264Vui.stVuiAspectRatio.overscan_appropriate_flag = 0;
+		h264Vui.stVuiAspectRatio.sar_width = 1;
+		h264Vui.stVuiAspectRatio.sar_height = 1;
+		h264Vui.stVuiTimeInfo.timing_info_present_flag = 1;
+		h264Vui.stVuiTimeInfo.num_units_in_tick = 1;
+		h264Vui.stVuiTimeInfo.time_scale = 30;
+		//h264Vui.stVuiTimeInfo.num_ticks_poc_diff_one_minus1 = 1;
+		h264Vui.stVuiVideoSignal.video_signal_type_present_flag = 0;
+		h264Vui.stVuiVideoSignal.video_format = 5;
+		h264Vui.stVuiVideoSignal.video_full_range_flag = 0;
+		h264Vui.stVuiVideoSignal.colour_description_present_flag = 0;
+		h264Vui.stVuiVideoSignal.colour_primaries = 2;
+		h264Vui.stVuiVideoSignal.transfer_characteristics = 2;
+		h264Vui.stVuiVideoSignal.matrix_coefficients = 2;
+		h264Vui.stVuiBitstreamRestric.bitstream_restriction_flag = 0;
+
+		// _mmf_dump_venc_h264_vui(&h264Vui);
+
+		s32Ret = CVI_VENC_SetH264Vui(ch, &h264Vui);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetH264Vui failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	// rate control
+	{
+		VENC_RC_PARAM_S stRcParam;
+		s32Ret = CVI_VENC_GetRcParam(ch, &stRcParam);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetRcParam failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+		stRcParam.s32FirstFrameStartQp = 35;
+		stRcParam.stParamH264Cbr.u32MinIprop = 1;
+		stRcParam.stParamH264Cbr.u32MaxIprop = 10;
+		stRcParam.stParamH264Cbr.u32MaxQp = 51;
+		stRcParam.stParamH264Cbr.u32MinQp = 20;
+		stRcParam.stParamH264Cbr.u32MaxIQp = 51;
+		stRcParam.stParamH264Cbr.u32MinIQp = 20;
+
+		// _mmf_dump_venc_rc_param(&stRcParam);
+
+		s32Ret = CVI_VENC_SetRcParam(ch, &stRcParam);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetRcParam failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	// frame lost set
+	{
+		VENC_FRAMELOST_S stFL;
+		s32Ret = CVI_VENC_GetFrameLostStrategy(ch, &stFL);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_GetFrameLostStrategy failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+		stFL.enFrmLostMode = FRMLOST_PSKIP;
+
+		// _mmf_dump_venc_framelost(&stFL);
+
+		s32Ret = CVI_VENC_SetFrameLostStrategy(ch, &stFL);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_SetFrameLostStrategy failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	if (priv.enc_chn_frame[ch]) {
+		_mmf_free_frame(priv.enc_chn_frame[ch]);
+		priv.enc_chn_frame[ch] = NULL;
+	}
+
+	priv.enc_chn_type[ch] = PT_H264;
+	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H26X_ID;
+
+	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
+	priv.enc_chn_cfg[ch].w = cfg->w;
+	priv.enc_chn_cfg[ch].h = cfg->h;
+	priv.enc_chn_cfg[ch].fmt = cfg->fmt;
+	priv.enc_chn_cfg[ch].jpg_quality = cfg->jpg_quality;
+	priv.enc_chn_running[ch] = 0;
+	priv.enc_chn_is_init[ch] = 1;
+
+	return s32Ret;
+}
+
+#if 0
+int mmf_enc_h264_init(int ch, int w, int h)
+{
+	mmf_venc_cfg_t cfg = {
+		.type = 2,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = PIXEL_FORMAT_NV21,
+		.jpg_quality = 0,       // unused
+		.gop = 50,
+		.intput_fps = 30,
+		.output_fps = 30,
+		.bitrate = 3000,
+	};
+
+	return _mmf_enc_h264_init(ch, &cfg);
+}
+#endif
+
+static int mmf_venc_deinit(int ch)
+{
+	VPSS_GRP out_grp = 0;
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_is_init[ch]) {
+		return 0;
+	}
+
+	mmf_stream_t stream;
+	if (!mmf_venc_pop(ch, &stream)) {
+		mmf_venc_free(ch);
+	}
+
+	switch (priv.enc_chn_cfg[ch].fmt) {
+	case PIXEL_FORMAT_RGB_888:
+		out_grp = 2;
+
+		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(out_grp, ch, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS unbind VENC failed with %d\n", s32Ret);
+		}
+
+		s32Ret = _mmf_vpss_deinit(out_grp, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS deinit failed with %d\n", s32Ret);
+		}
+		break;
+	case PIXEL_FORMAT_NV21:
+		break;
+	default:
+		break;
 	}
 
 	s32Ret = CVI_VENC_StopRecvFrame(ch);
@@ -3112,74 +3238,109 @@ int mmf_enc_h265_deinit(int ch)
 		printf("CVI_VENC_DestroyChn [%d] failed with %d\n", ch, s32Ret);
 	}
 
-	if (priv.enc_h265_video_frame) {
-		_mmf_free_frame(priv.enc_h265_video_frame);
-		priv.enc_h265_video_frame = NULL;
+	if (priv.enc_chn_frame[ch]) {
+		_mmf_free_frame(priv.enc_chn_frame[ch]);
+		priv.enc_chn_frame[ch] = NULL;
 	}
 
-	priv.enc_h265_frame_w = 0;
-	priv.enc_h265_frame_h = 0;
-	priv.enc_h265_frame_fmt = 0;
-	priv.enc_h265_running = 0;
-	priv.enc_h265_is_init = 0;
+	priv.enc_chn_cfg[ch].w = 0;
+	priv.enc_chn_cfg[ch].h = 0;
+	priv.enc_chn_cfg[ch].fmt = 0;
+	priv.enc_chn_running[ch] = 0;
+	priv.enc_chn_is_init[ch] = 0;
 
 	return s32Ret;
 }
 
-int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
+static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
+	int out_ch = ch;
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (priv.enc_h265_running) {
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (priv.enc_chn_running[ch]) {
 		return s32Ret;
 	}
 
-	if (priv.enc_h265_video_frame == NULL || priv.enc_h265_frame_w != w || priv.enc_h265_frame_h != h || priv.enc_h265_frame_fmt != format) {
-		if (!priv.enc_h265_is_init)
-			mmf_enc_h265_init(ch, w, h);
-		priv.enc_h265_frame_w = w;
-		priv.enc_h265_frame_h = h;
-		priv.enc_h265_frame_fmt = format;
-		priv.enc_h265_video_frame = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_ENC_H265_ID, (SIZE_S){(CVI_U32)w, (CVI_U32)h}, (PIXEL_FORMAT_E)format);
-		if (!priv.enc_h265_video_frame) {
+	SIZE_S stSize = {(CVI_U32)w, (CVI_U32)h};
+	if (priv.enc_chn_frame[ch] == NULL || priv.enc_chn_cfg[ch].w != w || priv.enc_chn_cfg[ch].h != h || priv.enc_chn_cfg[ch].fmt != format || priv.enc_chn_cfg[ch].jpg_quality != quality) {
+		s32Ret = mmf_rst_venc_channel(ch, w, h, format, quality);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("mmf_rst_venc_channel failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		priv.enc_chn_cfg[ch].w = w;
+		priv.enc_chn_cfg[ch].h = h;
+		priv.enc_chn_cfg[ch].fmt = format;
+		priv.enc_chn_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(priv.enc_chn_vb_id[ch], stSize, (PIXEL_FORMAT_E)format);
+		if (!priv.enc_chn_frame[ch]) {
 			printf("Alloc frame failed!\r\n");
 			return -1;
 		}
 	}
 
 	switch (format) {
+		case PIXEL_FORMAT_RGB_888:
+		{
+			if (priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] != (CVI_U32)w * 3) {
+				for (int h0 = 0; h0 < h; h0 ++) {
+					memcpy((uint8_t *)priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0] + priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] * h0,
+							((uint8_t *)data) + w * h0 * 3, w * 3);
+				}
+			} else {
+				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0], data, w * h * 3);
+			}
+
+			out_ch = 2;
+		}
+		break;
 		case PIXEL_FORMAT_NV21:
 		{
-			if (priv.enc_h265_video_frame->stVFrame.u32Stride[0] != (CVI_U32)w) {
+			if (priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] != (CVI_U32)w) {
 				for (int h0 = 0; h0 < h * 3 / 2; h0 ++) {
-					memcpy((uint8_t *)priv.enc_h265_video_frame->stVFrame.pu8VirAddr[0] + priv.enc_h265_video_frame->stVFrame.u32Stride[0] * h,
+					memcpy((uint8_t *)priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0] + priv.enc_chn_frame[ch]->stVFrame.u32Stride[0] * h0,
 							((uint8_t *)data) + w * h0, w);
 				}
 			} else {
 				uint32_t p0_size = w * h;
 				uint32_t p1_size = w * h / 2;
-				memcpy(priv.enc_h265_video_frame->stVFrame.pu8VirAddr[0], ((uint8_t *)data), p0_size);
-				memcpy(priv.enc_h265_video_frame->stVFrame.pu8VirAddr[1], ((uint8_t *)data) + p0_size, p1_size);
+				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0], ((uint8_t *)data), p0_size);
+				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[1], ((uint8_t *)data) + p0_size, p1_size);
 			}
 		}
 		break;
 		default: return -1;
 	}
 
-	s32Ret = CVI_VENC_SendFrame(ch, priv.enc_h265_video_frame, 1000);
+	s32Ret = CVI_VENC_SendFrame(out_ch, priv.enc_chn_frame[ch], 1000);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_GetStream failed with %#x\n", s32Ret);
+		printf("CVI_VENC_SendFrame failed with %d\n", s32Ret);
 		return s32Ret;
 	}
 
-	priv.enc_h265_running = 1;
+	priv.enc_chn_running[ch] = 1;
 
 	return s32Ret;
 }
 
-int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream)
+int mmf_venc_push(int ch, uint8_t *data, int w, int h, int format)
+{
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+
+	return _mmf_venc_push(ch, data, w, h, format, priv.enc_chn_cfg[ch].jpg_quality);
+}
+
+int mmf_venc_pop(int ch, mmf_stream_t *stream)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (!priv.enc_h265_running) {
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_running[ch]) {
 		return s32Ret;
 	}
 
@@ -3206,8 +3367,8 @@ int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream)
 		return -1;
 	}
 
-	priv.enc_h265_stream.pstPack = (VENC_PACK_S *)malloc(sizeof(VENC_PACK_S) * 8);
-	if (!priv.enc_h265_stream.pstPack) {
+	priv.enc_chn_stream[ch].pstPack = (VENC_PACK_S *)malloc(sizeof(VENC_PACK_S) * 8);
+	if (!priv.enc_chn_stream[ch].pstPack) {
 		printf("Malloc failed!\r\n");
 		return -1;
 	}
@@ -3220,57 +3381,182 @@ int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream)
 	}
 
 	if (stStatus.u32CurPacks > 0) {
-		s32Ret = CVI_VENC_GetStream(ch, &priv.enc_h265_stream, 1000);
+		s32Ret = CVI_VENC_GetStream(ch, &priv.enc_chn_stream[ch], 1000);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetStream failed with %#x\n", s32Ret);
-			free(priv.enc_h265_stream.pstPack);
+			free(priv.enc_chn_stream[ch].pstPack);
+			priv.enc_chn_stream[ch].pstPack = NULL;
 			return s32Ret;
 		}
 	} else {
 		printf("CVI_VENC_QueryStatus find not pack\r\n");
-		free(priv.enc_h265_stream.pstPack);
+		free(priv.enc_chn_stream[ch].pstPack);
+		priv.enc_chn_stream[ch].pstPack = NULL;
 		return -1;
 	}
 
 	if (stream) {
-		stream->count = priv.enc_h265_stream.u32PackCount;
+		stream->count = priv.enc_chn_stream[ch].u32PackCount;
 		if (stream->count > 8) {
 			printf("pack count is too large! cnt:%d\r\n", stream->count);
-			free(priv.enc_h265_stream.pstPack);
+			free(priv.enc_chn_stream[ch].pstPack);
+			priv.enc_chn_stream[ch].pstPack = NULL;
 			return -1;
 		}
 		for (int i = 0; i < stream->count; i++) {
-			stream->data[i] = priv.enc_h265_stream.pstPack[i].pu8Addr + priv.enc_h265_stream.pstPack[i].u32Offset;
-			stream->data_size[i] = priv.enc_h265_stream.pstPack[i].u32Len - priv.enc_h265_stream.pstPack[i].u32Offset;
+			stream->data[i] = priv.enc_chn_stream[ch].pstPack[i].pu8Addr + priv.enc_chn_stream[ch].pstPack[i].u32Offset;
+			stream->data_size[i] = priv.enc_chn_stream[ch].pstPack[i].u32Len - priv.enc_chn_stream[ch].pstPack[i].u32Offset;
 		}
 	}
 
 	return s32Ret;
 }
 
-int mmf_enc_h265_free(int ch)
+int mmf_venc_free(int ch)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (!priv.enc_h265_running) {
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_running[ch]) {
 		return s32Ret;
 	}
 
-	if (priv.enc_h265_stream.pstPack)
-		free(priv.enc_h265_stream.pstPack);
+	if (priv.enc_chn_stream[ch].pstPack)
+		free(priv.enc_chn_stream[ch].pstPack);
 
-	s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_h265_stream);
+	s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_chn_stream[ch]);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
-	priv.enc_h265_running = 0;
+	priv.enc_chn_running[ch] = 0;
 	return s32Ret;
+}
+
+int mmf_enc_h265_deinit(int ch)
+{
+	return mmf_venc_deinit(ch);
+}
+
+int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
+{
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_is_init[ch]) {
+		s32Ret = mmf_enc_h265_init(ch, w, h);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("mmf_enc_h265_init failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+	}
+
+	return _mmf_venc_push(ch, data, w, h, format, 0);
+}
+
+int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream)
+{
+	return mmf_venc_pop(ch, (mmf_stream_t *)stream);
+}
+
+int mmf_enc_h265_free(int ch)
+{
+	return mmf_venc_free(ch);
+}
+
+int mmf_venc_unused_channel(void) {
+	for (int i = 0; i < MMF_ENC_MAX_CHN; i++) {
+		if (!priv.enc_chn_is_init[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+int mmf_venc_is_used(int ch)
+{
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+
+	return priv.enc_chn_running[ch];
+}
+
+int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg)
+{
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.enc_chn_running[ch]) {
+		return -1;
+	}
+	if (!cfg) {
+		return -1;
+	}
+
+	memcpy(cfg, &priv.enc_chn_cfg[ch], sizeof(priv.enc_chn_cfg[ch]));
+
+	return 0;
 }
 
 int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 {
+	if (ch >= MMF_ENC_MAX_CHN) {
+		printf("%s: channel %d is out of range.\n", __func__, ch);
+		return -1;
+	}
+	if (!cfg) {
+		printf("%s: cfg is not set.\n", __func__);
+		return -1;
+	}
+	if (cfg->type == 1)
+		return _mmf_enc_h265_init(ch, cfg);
+	if (cfg->type == 2)
+		return _mmf_enc_h264_init(ch, cfg);
+	if (cfg->type == 4)
+		return _mmf_enc_jpg_init(ch, cfg);
+
+	printf("%s: type %d not supported.\n", __func__, cfg->type);
 	return -1;
+}
+
+int mmf_del_venc_channel(int ch)
+{
+	return mmf_venc_deinit(ch);
+}
+
+int mmf_del_venc_channel_all()
+{
+	for (int i = 0; i < MMF_ENC_MAX_CHN; i++)
+		mmf_del_venc_channel(i);
+
+	return 0;
+}
+
+static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality)
+{
+	mmf_venc_cfg_t cfg;
+
+	if (ch >= MMF_ENC_MAX_CHN) {
+		printf("%s: channel %d is out of range.\n", __func__, ch);
+		return -1;
+	}
+	if (!priv.enc_chn_is_init[ch]) {
+		printf("%s: channel %d is not initialized.\n", __func__, ch);
+		return -1;
+	}
+
+	memcpy(&cfg, &priv.enc_chn_cfg[ch], sizeof(cfg));
+	mmf_del_venc_channel(ch);
+	cfg.w = w;
+	cfg.h = h;
+	cfg.fmt = format;
+	cfg.jpg_quality = quality;
+
+	return mmf_add_venc_channel(ch, &cfg);
 }
 
 int mmf_add_vdec_channel(int ch, int format_out, mmf_vdec_cfg_t *cfg)
@@ -3516,6 +3802,19 @@ void mmf_set_vi_vflip(int ch, bool en)
 	g_priv.vi_vflip[ch] = en;
 }
 
+void mmf_get_vo_video_hmirror(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vo_video_hmirror[ch];
+}
+
 void mmf_set_vo_video_hmirror(int ch, bool en)
 {
 	if (ch > MMF_VI_MAX_CHN) {
@@ -3524,6 +3823,19 @@ void mmf_set_vo_video_hmirror(int ch, bool en)
 	}
 
 	g_priv.vo_video_hmirror[ch] = en;
+}
+
+void mmf_get_vo_video_flip(int ch, bool *en)
+{
+	if (ch > MMF_VI_MAX_CHN) {
+		printf("invalid ch, must be [0, %d)\r\n", ch);
+		return;
+	}
+
+	if (!en)
+		return;
+
+	*en = g_priv.vo_video_vflip[ch];
 }
 
 void mmf_set_vo_video_flip(int ch, bool en)
@@ -3665,6 +3977,11 @@ int mmf_vi_get_max_size(int *width, int *height)
 	return 0;
 }
 
+void mmf_vi_set_pop_timeout(int ms)
+{
+	priv.vi_pop_timeout = ms;
+}
+
 int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h)
 {
 	return -1;
@@ -3672,12 +3989,89 @@ int mmf_vi_channel_set_windowing(int ch, int x, int y, int w, int h)
 
 int mmf_get_again(int ch, uint32_t *gain)
 {
+	ISP_EXP_INFO_S stExpInfo;
+	memset(&stExpInfo, 0, sizeof(ISP_EXP_INFO_S));
+	CVI_ISP_QueryExposureInfo(ch, &stExpInfo);
+
+	if (gain) {
+		*gain = stExpInfo.u32AGain;
+	}
 	return 0;
 }
 
 int mmf_set_again(int ch, uint32_t gain)
 {
-	return -1;
+	ISP_EXPOSURE_ATTR_S stExpAttr;
+	memset(&stExpAttr, 0, sizeof(ISP_EXPOSURE_ATTR_S));
+	CVI_ISP_GetExposureAttr(ch, &stExpAttr);
+	if (stExpAttr.enOpType == OP_TYPE_MANUAL) {
+		stExpAttr.stManual.enAGainOpType = OP_TYPE_MANUAL;
+		stExpAttr.stManual.u32AGain = gain;
+		CVI_ISP_SetExposureAttr(ch, &stExpAttr);
+		//usleep(100 * 1000);
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int mmf_get_dgain(int ch, uint32_t *gain)
+{
+	ISP_EXP_INFO_S stExpInfo;
+	memset(&stExpInfo, 0, sizeof(ISP_EXP_INFO_S));
+	CVI_ISP_QueryExposureInfo(ch, &stExpInfo);
+
+	if (gain) {
+		*gain = stExpInfo.u32DGain;
+	}
+	return 0;
+}
+
+int mmf_set_dgain(int ch, uint32_t gain)
+{
+	ISP_EXPOSURE_ATTR_S stExpAttr;
+	memset(&stExpAttr, 0, sizeof(ISP_EXPOSURE_ATTR_S));
+	CVI_ISP_GetExposureAttr(ch, &stExpAttr);
+	if (stExpAttr.enOpType == OP_TYPE_MANUAL) {
+		stExpAttr.stManual.enDGainOpType = OP_TYPE_MANUAL;
+		stExpAttr.stManual.u32DGain = gain;
+		CVI_ISP_SetExposureAttr(ch, &stExpAttr);
+		//usleep(100 * 1000);
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int mmf_get_ispdgain(int ch, uint32_t *gain)
+{
+	ISP_EXP_INFO_S stExpInfo;
+	memset(&stExpInfo, 0, sizeof(ISP_EXP_INFO_S));
+	CVI_ISP_QueryExposureInfo(ch, &stExpInfo);
+
+	if (gain) {
+		*gain = stExpInfo.u32ISPDGain;
+	}
+	return 0;
+}
+
+int mmf_set_ispdgain(int ch, uint32_t gain)
+{
+	ISP_EXPOSURE_ATTR_S stExpAttr;
+	memset(&stExpAttr, 0, sizeof(ISP_EXPOSURE_ATTR_S));
+	CVI_ISP_GetExposureAttr(ch, &stExpAttr);
+	if (stExpAttr.enOpType == OP_TYPE_MANUAL) {
+		stExpAttr.stManual.enISPDGainOpType = OP_TYPE_MANUAL;
+		stExpAttr.stManual.u32ISPDGain = gain;
+		CVI_ISP_SetExposureAttr(ch, &stExpAttr);
+		//usleep(100 * 1000);
+	} else {
+		return -1;
+	}
+
+	return 0;
 }
 
 int mmf_set_wb_mode(int ch, int mode)
@@ -3782,6 +4176,7 @@ int mmf_add_vi_channel0(uint32_t param, ...)
 	va_end(ap);
 
 	UNUSED(pool_num);
+	priv.vi_pop_timeout = 3000;
 	return _mmf_add_vi_channel(ch, width, height, format, fps, depth, mirror, vflip, fit);
 }
 
