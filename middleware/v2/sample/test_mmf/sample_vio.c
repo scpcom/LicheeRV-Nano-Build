@@ -2689,6 +2689,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 	}
 
 	int vi_ch = mmf_get_vi_unused_channel();
+	mmf_set_vi_hmirror(vi_ch, true);
+	mmf_set_vi_vflip(vi_ch, true);
 	if (0 != mmf_add_vi_channel(vi_ch, img_w, img_h, img_fmt)) {
 		DEBUG("mmf_add_vi_channel failed!\r\n");
 		mmf_deinit();
@@ -2702,6 +2704,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 		mmf_deinit();
 		return -1;
 	}
+
+	mmf_vi_set_pop_timeout(100);
 
 	int layer = 0;
 	int vo_ch = mmf_get_vo_unused_channel(layer);
