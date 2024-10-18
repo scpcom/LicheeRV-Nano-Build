@@ -2747,9 +2747,13 @@ static int _test_vi_region_venc_h265_rtsp(void)
 
 	show_ip_on_oled(ipdata);
 
+	uint8_t *filebuf = _prepare_image(img_w, img_h, img_fmt);
+	uint8_t *filebuf2 = _prepare_image(img_w2, img_h2, img_fmt2);
 	uint64_t start = _get_time_us();
 	uint64_t last_loop_us = start;
+	uint64_t timestamp = 0;
 	uint8_t frame_count = 0;
+	int last_vi_pop = -1;
 
 	void *data, *data2;
 	int data_size, width, height, format;
@@ -2811,17 +2815,33 @@ static int _test_vi_region_venc_h265_rtsp(void)
 			DEBUG("use %ld us\r\n", _get_time_us() - start);
 		}
 
-		start = _get_time_us();
-		if (mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format)) {
-			continue;
+		if (!last_vi_pop) {
+			start = _get_time_us();
+			mmf_vi_frame_free(vi_ch);
+			DEBUG("use %ld us\r\n", _get_time_us() - start);
 		}
+
+		start = _get_time_us();
+		int vi_ret = mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format);
+		if (vi_ret != last_vi_pop) {
+			uint64_t vi_stamp = timestamp;
+			vi_stamp += (_get_time_us() - last_loop_us) / 1000;
+			printf("[%.6ld.%.3ld] %s\n", vi_stamp / 1000, vi_stamp % 1000,
+				vi_ret ? "no input signal" : "got input signal");
+			mmf_enc_h265_deinit(ch);
+			mmf_enc_h265_init(ch, img_w, img_h);
+			last_vi_pop = vi_ret;
+		}
+		if (vi_ret)
+			data = filebuf;
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_vi_frame_pop(vi_ch2, &data2, &data_size2, &width2, &height2, &format2)) {
-			mmf_vi_frame_free(vi_ch);
-			continue;
-		}
+		int vi_ret2 = vi_ret;
+		if (!vi_ret)
+			vi_ret2 = mmf_vi_frame_pop(vi_ch2, &data2, &data_size2, &width2, &height2, &format2);
+		if (vi_ret2)
+			data2 = filebuf2;
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
@@ -2856,13 +2876,11 @@ static int _test_vi_region_venc_h265_rtsp(void)
 			save_buff_to_file("rtsp_stream.jpg", data, data_size);
 		}
 
-		start = _get_time_us();
-		mmf_vi_frame_free(vi_ch);
-		DEBUG("use %ld us\r\n", _get_time_us() - start);
-
-		start = _get_time_us();
-		mmf_vi_frame_free(vi_ch2);
-		DEBUG("use %ld us\r\n", _get_time_us() - start);
+		if (!vi_ret2) {
+			start = _get_time_us();
+			mmf_vi_frame_free(vi_ch2);
+			DEBUG("use %ld us\r\n", _get_time_us() - start);
+		}
 
 		// start = _get_time_us();
 		// if (0 != mmf_region_frame_push(rgn_ch, rgn_test_img, rgn_w * rgn_h * 4)) {
@@ -2876,6 +2894,7 @@ static int _test_vi_region_venc_h265_rtsp(void)
 		DEBUG(">>>>>> flush vo frame %ld\n", _get_time_us() - start);
 
 		DEBUG("use %ld us\r\n", _get_time_us() - last_loop_us);
+		timestamp += (_get_time_us() - last_loop_us) / 1000;
 		last_loop_us = _get_time_us();
 	}
 
@@ -2897,6 +2916,8 @@ _exit:
 	if (0 != mmf_deinit()) {
 		printf("mmf deinit\n");
 	}
+	free(filebuf2);
+	free(filebuf);
 	close_oled();
 	return 0;
 
