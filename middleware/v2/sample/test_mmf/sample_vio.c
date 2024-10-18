@@ -296,13 +296,18 @@ void OLED_DisplayTurn(int _fb, uint8_t i)
 }
 
 //初始化				    
-void OLED_Init(int _fb)
+int OLED_Init(int _fb)
 {
+	int ret;
+
 	// OLED_RES_Clr();
   	// delay_ms(200);
 	// OLED_RES_Set();
 	
-	oled_write_register(_fb, OLED_CMD, 0xAE);//--turn off oled panel
+	ret = oled_write_register(_fb, OLED_CMD, 0xAE);//--turn off oled panel
+	if (ret != CVI_SUCCESS)
+		return ret;
+
 	oled_write_register(_fb, OLED_CMD, 0x00);//---set low column address
 	oled_write_register(_fb, OLED_CMD, 0x10);//---set high column address
 	oled_write_register(_fb, OLED_CMD, 0x40);//--set start line address  Set Mapping RAM Display Start Line (0x00~0x3F)
@@ -331,6 +336,8 @@ void OLED_Init(int _fb)
 	oled_write_register(_fb, OLED_CMD, 0xA6);// Disable Inverse Display On (0xa6/a7) 
 	OLED_Clear(_fb);
 	oled_write_register(_fb, OLED_CMD, 0xAF); /*display ON*/ 
+
+	return ret;
 }
 
 void OLED_ShowStringtoend(int _fb, uint8_t x, uint8_t y, uint8_t *chr, uint8_t sizey, uint8_t end)
@@ -346,32 +353,40 @@ void OLED_ShowStringtoend(int _fb, uint8_t x, uint8_t y, uint8_t *chr, uint8_t s
 
 void show_ip_on_oled(uint8_t *chr)
 {
+	int ret;
 	int olde_fb;
 	if(oled_i2c_init(OLED_ENABLE, &olde_fb) < 0){
 		printf("I2C_SLAVE_FORCE error!!\n");
 		return;
 	}
-	OLED_Init(olde_fb);
+	ret = OLED_Init(olde_fb);
+	if (ret != CVI_SUCCESS)
+		goto oled_disable;
 	OLED_ColorTurn(olde_fb, 0);	//0正常显示 1 反色显示
   	OLED_DisplayTurn(olde_fb, 0);	//0正常显示 1 屏幕翻转显示
 	OLED_Clear(olde_fb);
 	OLED_ShowString(olde_fb, 4, 1, "rtsp://", 16);
 	OLED_ShowStringtoend(olde_fb, 4, 3, chr+7, 16, ':');
 	OLED_ShowString(olde_fb, 4, 5, ":8554/live", 16);
+oled_disable:
 	oled_i2c_init(OLED_DISABLE, &olde_fb);
 }
 
 void close_oled()
 {
+	int ret;
 	int olde_fb;
 	if(oled_i2c_init(OLED_ENABLE, &olde_fb) < 0){
 		printf("I2C_SLAVE_FORCE error!!\n");
 		return;
 	}
-	OLED_Init(olde_fb);
+	ret = OLED_Init(olde_fb);
+	if (ret != CVI_SUCCESS)
+		goto oled_disable;
 	OLED_ColorTurn(olde_fb, 0);	//0正常显示 1 反色显示
   	OLED_DisplayTurn(olde_fb, 0);	//0正常显示 1 屏幕翻转显示
 	OLED_Clear(olde_fb);
+oled_disable:
 	oled_i2c_init(OLED_DISABLE, &olde_fb);
 }
 
