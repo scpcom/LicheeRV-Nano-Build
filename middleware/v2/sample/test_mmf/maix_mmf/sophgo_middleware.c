@@ -275,9 +275,9 @@ void mmf_dump_frame(VIDEO_FRAME_INFO_S *frame) {
 	printf("u32Length[0]:\t\t%d\n", vframe->u32Length[0]);
 	printf("u32Length[1]:\t\t%d\n", vframe->u32Length[1]);
 	printf("u32Length[2]:\t\t%d\n", vframe->u32Length[2]);
-	printf("u64PhyAddr[0]:\t\t%#lx\n", vframe->u64PhyAddr[0]);
-	printf("u64PhyAddr[1]:\t\t%#lx\n", vframe->u64PhyAddr[1]);
-	printf("u64PhyAddr[2]:\t\t%#lx\n", vframe->u64PhyAddr[2]);
+	printf("u64PhyAddr[0]:\t\t%#llx\n", vframe->u64PhyAddr[0]);
+	printf("u64PhyAddr[1]:\t\t%#llx\n", vframe->u64PhyAddr[1]);
+	printf("u64PhyAddr[2]:\t\t%#llx\n", vframe->u64PhyAddr[2]);
 	printf("pu8VirAddr[0]:\t\t%p\n", vframe->pu8VirAddr[0]);
 	printf("pu8VirAddr[1]:\t\t%p\n", vframe->pu8VirAddr[1]);
 	printf("pu8VirAddr[2]:\t\t%p\n", vframe->pu8VirAddr[2]);
