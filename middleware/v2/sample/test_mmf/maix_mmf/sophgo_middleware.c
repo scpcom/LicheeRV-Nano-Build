@@ -1085,9 +1085,10 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 #if 1
 	VPSS_GRP_ATTR_S stGrpAttr;
 	VPSS_CROP_INFO_S   stChnCropInfo;
-	VPSS_CHN_ATTR_S chn_attr = {0};
+	VPSS_CHN_ATTR_S chn_attr;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
+	memset(&chn_attr, 0, sizeof(chn_attr));
 	s32Ret = CVI_VPSS_GetGrpAttr(VpssGrp, &stGrpAttr);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("CVI_VPSS_GetGrpAttr failed. s32Ret: 0x%x !\n", s32Ret);
