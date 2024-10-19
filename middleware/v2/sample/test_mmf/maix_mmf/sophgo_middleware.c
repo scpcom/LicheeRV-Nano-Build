@@ -418,8 +418,32 @@ static VIDEO_FRAME_INFO_S *_mmf_alloc_frame(int id, SIZE_S stSize, PIXEL_FORMAT_
 
 static CVI_S32 _mmf_free_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
 {
-	VIDEO_FRAME_S *pstVFrame = &pstVideoFrame->stVFrame;
+	VIDEO_FRAME_S *pstVFrame;
 	VB_BLK blk;
+	CVI_U32 u32VBSize = 0;
+
+	if (!pstVideoFrame)
+		return CVI_FAILURE;
+
+	pstVFrame = &pstVideoFrame->stVFrame;
+
+	if (pstVFrame->pu8VirAddr[2] == (CVI_U8 *)pstVFrame->pu8VirAddr[1] + pstVFrame->u32Length[1])
+	{
+		u32VBSize += pstVFrame->u32Length[2];
+		pstVFrame->u32Length[2] = 0;
+		pstVFrame->pu8VirAddr[2] = NULL;
+	}
+	if (pstVFrame->pu8VirAddr[1] == (CVI_U8 *)pstVFrame->pu8VirAddr[0] + pstVFrame->u32Length[0])
+	{
+		u32VBSize += pstVFrame->u32Length[1];
+		pstVFrame->u32Length[1] = 0;
+		pstVFrame->pu8VirAddr[1] = NULL;
+	}
+	if (pstVFrame->pu8VirAddr[0])
+	{
+		u32VBSize += pstVFrame->u32Length[0];
+		pstVFrame->u32Length[0] = u32VBSize;
+	}
 
 	if (pstVFrame->pu8VirAddr[0])
 		CVI_SYS_Munmap((CVI_VOID *)pstVFrame->pu8VirAddr[0], pstVFrame->u32Length[0]);
