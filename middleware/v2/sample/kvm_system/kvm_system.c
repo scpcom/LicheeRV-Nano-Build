@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
 
 	while (!exit_flag) {
 		show_info_on_oled();
-		usleep(500 * 1000);
+		usleep(1000 * 1000);
 	}
 
 	show_info_close_oled();
