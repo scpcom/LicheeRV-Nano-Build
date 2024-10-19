@@ -1733,6 +1733,11 @@ static CVI_S32 _mmf_free_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
 //     _mmf_dump_venc_rc_attr(&venc_chn_attr->stRcAttr);
 // }
 
+int test_mmf_venc_init(int ch, int w, int h)
+{
+	return mmf_enc_h265_init(ch, w, h);
+}
+
 static int _test_venc_h265(void)
 {
 	uint8_t *filebuf = NULL;
@@ -1762,40 +1767,40 @@ static int _test_venc_h265(void)
 	}
 
 	int ch = 0;
-	if (mmf_enc_h265_init(ch, img_w, img_h)) {
-		printf("mmf_enc_h265_init failed\n");
+	if (test_mmf_venc_init(ch, img_w, img_h)) {
+		printf("test_mmf_venc_init failed\n");
 		return -1;
 	}
 
 #if 0
 	while (!exit_flag) {
-		mmf_h265_stream_t stream;
-		if (!mmf_enc_h265_pop(ch, &stream)) {
+		mmf_stream_t stream;
+		if (!mmf_venc_pop(ch, &stream)) {
 			for (int i = 0; i < stream.count; i ++) {
 				printf("[%d] stream.data:%p stream.len:%d\n", i, stream.data[i], stream.data_size[i]);
 			}
 
-			if (mmf_enc_h265_free(ch)) {
-				printf("mmf_enc_h265_free failed\n");
+			if (mmf_venc_free(ch)) {
+				printf("mmf_venc_free failed\n");
 				goto _exit;
 			}
 		}
 
-		if (mmf_enc_h265_push(ch, filebuf, img_w, img_h, img_fmt)) {
-			printf("mmf_enc_h265_push failed\n");
+		if (mmf_venc_push(ch, filebuf, img_w, img_h, img_fmt)) {
+			printf("mmf_venc_push failed\n");
 			goto _exit;
 		}
 	}
 #else
 	while (!exit_flag) {
-		if (mmf_enc_h265_push(ch, filebuf, img_w, img_h, img_fmt)) {
-			printf("mmf_enc_h265_push failed\n");
+		if (mmf_venc_push(ch, filebuf, img_w, img_h, img_fmt)) {
+			printf("mmf_venc_push failed\n");
 			goto _exit;
 		}
 
-		mmf_h265_stream_t stream;
-		if (mmf_enc_h265_pop(ch, &stream)) {
-			printf("mmf_enc_h265_pull failed\n");
+		mmf_stream_t stream;
+		if (mmf_venc_pop(ch, &stream)) {
+			printf("mmf_venc_pop failed\n");
 			goto _exit;
 		}
 
@@ -1829,15 +1834,15 @@ static int _test_venc_h265(void)
 			// }
 		}
 
-		if (mmf_enc_h265_free(ch)) {
-			printf("mmf_enc_h265_free failed\n");
+		if (mmf_venc_free(ch)) {
+			printf("mmf_venc_free failed\n");
 			goto _exit;
 		}
 	}
 #endif
 
-	if (mmf_enc_h265_deinit(ch)) {
-		printf("mmf_enc_h265_deinit failed\n");
+	if (mmf_del_venc_channel(ch)) {
+		printf("mmf_del_venc_channel failed\n");
 		return -1;
 	}
 _exit:
@@ -1869,8 +1874,8 @@ static int _test_vi_venc_h265(void)
 	mmf_init();
 
 	int ch = 0;
-	if (mmf_enc_h265_init(ch, img_w, img_h)) {
-		printf("mmf_enc_h265_init failed\n");
+	if (test_mmf_venc_init(ch, img_w, img_h)) {
+		printf("test_mmf_venc_init failed\n");
 		return -1;
 	}
 
@@ -1900,16 +1905,16 @@ static int _test_vi_venc_h265(void)
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_enc_h265_push(ch, data, img_w, img_h, img_fmt)) {
-			printf("mmf_enc_h265_push failed\n");
+		if (mmf_venc_push(ch, data, img_w, img_h, img_fmt)) {
+			printf("mmf_venc_push failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		mmf_h265_stream_t stream;
-		if (mmf_enc_h265_pop(ch, &stream)) {
-			printf("mmf_enc_h265_pull failed\n");
+		mmf_stream_t stream;
+		if (mmf_venc_pop(ch, &stream)) {
+			printf("mmf_venc_pop failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -1951,8 +1956,8 @@ static int _test_vi_venc_h265(void)
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_enc_h265_free(ch)) {
-			printf("mmf_enc_h265_free failed\n");
+		if (mmf_venc_free(ch)) {
+			printf("mmf_venc_free failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -1965,8 +1970,8 @@ static int _test_vi_venc_h265(void)
 		last_loop_us = _get_time_us();
 	}
 
-	if (mmf_enc_h265_deinit(ch)) {
-		printf("mmf_enc_h265_deinit failed\n");
+	if (mmf_del_venc_channel(ch)) {
+		printf("mmf_del_venc_channel failed\n");
 		return -1;
 	}
 _exit:
@@ -2403,8 +2408,8 @@ static int _test_vi_venc_h265_rtsp(void)
 	if (!strcmp(sensor_name, "lt6911")) {
 		img_w = 1280; img_h = 720; img_fps = 60;
 	}
-	if (mmf_enc_h265_init(ch, img_w, img_h)) {
-		printf("mmf_enc_h265_init failed\n");
+	if (test_mmf_venc_init(ch, img_w, img_h)) {
+		printf("test_mmf_venc_init failed\n");
 		return -1;
 	}
 
@@ -2449,8 +2454,8 @@ static int _test_vi_venc_h265_rtsp(void)
 			vi_stamp += (_get_time_us() - last_loop_us) / 1000;
 			printf("[%.6ld.%.3ld] %s\n", vi_stamp / 1000, vi_stamp % 1000,
 				vi_ret ? "no input signal" : "got input signal");
-			mmf_enc_h265_deinit(ch);
-			mmf_enc_h265_init(ch, img_w, img_h);
+			mmf_del_venc_channel(ch);
+			test_mmf_venc_init(ch, img_w, img_h);
 			last_vi_pop = vi_ret;
 		}
 		if (vi_ret)
@@ -2458,16 +2463,16 @@ static int _test_vi_venc_h265_rtsp(void)
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_enc_h265_push(ch, data, img_w, img_h, img_fmt)) {
-			printf("mmf_enc_h265_push failed\n");
+		if (mmf_venc_push(ch, data, img_w, img_h, img_fmt)) {
+			printf("mmf_venc_push failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		mmf_h265_stream_t stream;
-		if (mmf_enc_h265_pop(ch, &stream)) {
-			printf("mmf_enc_h265_pull failed\n");
+		mmf_stream_t stream;
+		if (mmf_venc_pop(ch, &stream)) {
+			printf("mmf_venc_pop failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -2500,8 +2505,8 @@ static int _test_vi_venc_h265_rtsp(void)
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_enc_h265_free(ch)) {
-			printf("mmf_enc_h265_free failed\n");
+		if (mmf_venc_free(ch)) {
+			printf("mmf_venc_free failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -2511,8 +2516,8 @@ static int _test_vi_venc_h265_rtsp(void)
 		last_loop_us = _get_time_us();
 	}
 
-	if (mmf_enc_h265_deinit(ch)) {
-		printf("mmf_enc_h265_deinit failed\n");
+	if (mmf_del_venc_channel(ch)) {
+		printf("mmf_del_venc_channel failed\n");
 		return -1;
 	}
 
@@ -2680,8 +2685,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 
 	(void)fit;
 	int ch = 0;
-	if (mmf_enc_h265_init(ch, img_w, img_h)) {
-		printf("mmf_enc_h265_init failed\n");
+	if (test_mmf_venc_init(ch, img_w, img_h)) {
+		printf("test_mmf_venc_init failed\n");
 		return -1;
 	}
 
@@ -2783,8 +2788,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 			frame_count ++;
 
 		start = _get_time_us();
-		mmf_h265_stream_t stream;
-		if (!mmf_enc_h265_pop(ch, &stream)) {
+		mmf_stream_t stream;
+		if (!mmf_venc_pop(ch, &stream)) {
 			DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 			start = _get_time_us();
@@ -2815,8 +2820,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 			DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 			start = _get_time_us();
-			if (mmf_enc_h265_free(ch)) {
-				printf("mmf_enc_h265_free failed\n");
+			if (mmf_venc_free(ch)) {
+				printf("mmf_venc_free failed\n");
 				goto _exit;
 			}
 			DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -2835,8 +2840,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 			vi_stamp += (_get_time_us() - last_loop_us) / 1000;
 			printf("[%.6ld.%.3ld] %s\n", vi_stamp / 1000, vi_stamp % 1000,
 				vi_ret ? "no input signal" : "got input signal");
-			mmf_enc_h265_deinit(ch);
-			mmf_enc_h265_init(ch, img_w, img_h);
+			mmf_del_venc_channel(ch);
+			test_mmf_venc_init(ch, img_w, img_h);
 			last_vi_pop = vi_ret;
 		}
 		if (vi_ret)
@@ -2852,8 +2857,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_enc_h265_push(ch, data, img_w, img_h, img_fmt)) {
-			printf("mmf_enc_h265_push failed\n");
+		if (mmf_venc_push(ch, data, img_w, img_h, img_fmt)) {
+			printf("mmf_venc_push failed\n");
 			goto _exit;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -2910,8 +2915,8 @@ static int _test_vi_region_venc_h265_rtsp(void)
 	// 	exit_flag = 1;
 	// }
 
-	if (mmf_enc_h265_deinit(ch)) {
-		printf("mmf_enc_h265_deinit failed\n");
+	if (mmf_del_venc_channel(ch)) {
+		printf("mmf_del_venc_channel failed\n");
 		return -1;
 	}
 
