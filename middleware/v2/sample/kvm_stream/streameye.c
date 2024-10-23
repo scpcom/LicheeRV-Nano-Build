@@ -35,8 +35,28 @@
 #include "streameye.h"
 #include "auth.h"
 
+#include "cvi_buffer.h"
+
+#include "sample_comm.h"
+#include "maix_mmf.h"
 
     /* locals */
+
+// -------------------- mmf locals begin --------------------
+
+#define STREAM_SERVER_TYPE 4
+
+typedef struct {
+	uint32_t width;
+	uint32_t height;
+	uint32_t fps;
+	uint32_t qlty;
+	uint32_t res;
+} kvm_cfg_t;
+
+static kvm_cfg_t kvm_cfg;
+
+// -------------------- mmf locals end   --------------------
 
 static int client_timeout = DEF_CLIENT_TIMEOUT;
 static int max_clients = 0;
@@ -237,6 +257,285 @@ void bye_handler(int signal) {
     running = 0;
 }
 
+// -------------------- mmf helpers begin --------------------
+
+static uint64_t _get_time_us(void)
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return tv.tv_usec + tv.tv_sec * 1000000;
+}
+
+static void _rgb888_to_nv21(uint8_t* data, Uint32 w, Uint32 h, uint8_t* yuv)
+{
+    Uint32 row_bytes;
+    uint8_t* uv;
+    uint8_t* y;
+    uint8_t r, g, b;
+    uint8_t y_val, u_val, v_val;
+
+    uint8_t * img;
+    Uint32 i, j;
+    y = yuv;
+    uv = yuv + w * h;
+
+    row_bytes = (w * 3 );
+    h = h & ~1;
+    //先转换Y
+    for (i = 0; i < h; i++)
+    {
+	img = data + row_bytes * i;
+	for (j = 0; j <w; j++)
+	{
+	    r = *(img+3*j);
+	    g = *(img+3*j+1);
+	    b = *(img+3*j+2);
+	    if(r>=254&&g>=254&&b>=254)
+	    {
+		y_val=254;
+		*y++ = y_val;
+		continue;
+	    }
+	    y_val = (uint8_t)(((int)(299 * r) + (int)(597 * g) + (int)(114 * b)) / 1000);
+	    *y++ = y_val;
+	}
+    }
+    //转换uv
+    for (i = 0; i <h; i += 2)
+    {
+	img = data + row_bytes * i;
+	for (j = 0; j < w; j+=2)
+	{
+	    r = *(img+3*j);
+	    g = *(img+3*j+1);
+	    b = *(img+3*j+2);
+	    u_val= (uint8_t)(((int)(-168.7 * r) - (int)(331.3 * g) + (int)(500 * b) + 128000) / 1000);
+	    v_val= (uint8_t)(((int)(500 * r) - (int)(418.7 * g) - (int)(81.3 * b) + 128000) / 1000);
+	    *uv++ = v_val;
+	    *uv++ = u_val;
+	}
+   }
+}
+
+static uint8_t *_prepare_image(int width, int height, int format)
+{
+	switch (format) {
+	case PIXEL_FORMAT_RGB_888:
+	{
+		uint8_t *rgb_data = (uint8_t *)malloc(width * height * 3);
+		int x_oft = 0;
+		int remain_width = width;
+		int segment_width = width / 6;
+		int idx = 0;
+		while (remain_width > 0) {
+			int seg_w = (remain_width > segment_width) ? segment_width : remain_width;
+			uint8_t r,g,b;
+			switch (idx) {
+			case 0: r = 0xff, g = 0x00, b = 0x00; break;
+			case 1: r = 0x00, g = 0xff, b = 0x00; break;
+			case 2: r = 0x00, g = 0x00, b = 0xff; break;
+			case 3: r = 0xff, g = 0xff, b = 0x00; break;
+			case 4: r = 0xff, g = 0x00, b = 0xff; break;
+			case 5: r = 0x00, g = 0xff, b = 0xff; break;
+			default: r = 0x00, g = 0x00, b = 0x00; break;
+			}
+			idx ++;
+			for (int i = 0; i < height; i ++) {
+				for (int j = 0; j < seg_w; j ++) {
+					rgb_data[(i * width + x_oft + j) * 3 + 0] = r;
+					rgb_data[(i * width + x_oft + j) * 3 + 1] = g;
+					rgb_data[(i * width + x_oft + j) * 3 + 2] = b;
+				}
+			}
+			x_oft += seg_w;
+			remain_width -= seg_w;
+		}
+
+		for (int i = 0; i < height; i ++) {
+			uint8_t *buff = &rgb_data[(i * width + i) * 3];
+			buff[0] = 0xff;
+			buff[1] = 0xff;
+			buff[2] = 0xff;
+		}
+		for (int i = 0; i < height; i ++) {
+			uint8_t *buff = &rgb_data[(i * width + i + width - height) * 3];
+			buff[0] = 0xff;
+			buff[1] = 0xff;
+			buff[2] = 0xff;
+		}
+
+		return rgb_data;
+	}
+	case PIXEL_FORMAT_ARGB_8888:
+	{
+		uint8_t *rgb_data = (uint8_t *)malloc(width * height * 4);
+		memset(rgb_data, 0x00, width * height * 4);
+		int x_oft = 0;
+		int remain_width = width;
+		int segment_width = width / 6;
+		int idx = 0;
+		while (remain_width > 0) {
+			int seg_w = (remain_width > segment_width) ? segment_width : remain_width;
+			uint8_t r,g,b,a;
+			switch (idx) {
+			case 0: r = 0xff, g = 0x00, b = 0x00; a = 0x10; break;
+			case 1: r = 0x00, g = 0xff, b = 0x00; a = 0x20; break;
+			case 2: r = 0x00, g = 0x00, b = 0xff; a = 0x40; break;
+			case 3: r = 0xff, g = 0xff, b = 0x00; a = 0x60; break;
+			case 4: r = 0xff, g = 0x00, b = 0xff; a = 0x80; break;
+			case 5: r = 0x00, g = 0xff, b = 0xff; a = 0xA0; break;
+			default: r = 0x00, g = 0x00, b = 0x00; a = 0xC0; break;
+			}
+			idx ++;
+			for (int i = 0; i < height; i ++) {
+				for (int j = 0; j < seg_w; j ++) {
+					rgb_data[(i * width + x_oft + j) * 4 + 0] = r;
+					rgb_data[(i * width + x_oft + j) * 4 + 1] = g;
+					rgb_data[(i * width + x_oft + j) * 4 + 2] = b;
+					rgb_data[(i * width + x_oft + j) * 4 + 3] = a;
+				}
+			}
+			x_oft += seg_w;
+			remain_width -= seg_w;
+		}
+
+		// for (int i = 0; i < height; i ++) {
+		// 	uint8_t *buff = &rgb_data[(i * width + i) * 4];
+		// 	buff[0] = 0xff;
+		// 	buff[1] = 0xff;
+		// 	buff[2] = 0xff;
+		// }
+		// for (int i = 0; i < height; i ++) {
+		// 	uint8_t *buff = &rgb_data[(i * width + i + width - height) * 4];
+		// 	buff[0] = 0xff;
+		// 	buff[1] = 0xff;
+		// 	buff[2] = 0xff;
+		// }
+
+		return rgb_data;
+	}
+	case PIXEL_FORMAT_NV21:
+	{
+		uint8_t *rgb_data = _prepare_image(width, height, PIXEL_FORMAT_RGB_888);
+		uint8_t *nv21 = (uint8_t *)malloc(width * height * 3 / 2);
+		_rgb888_to_nv21(rgb_data, width, height, nv21);
+		free(rgb_data);
+		return nv21;
+	}
+	break;
+	default:
+		DEBUG("Only support PIXEL_FORMAT_RGB_888\r\n");
+		break;
+	}
+	return NULL;
+}
+
+#if 0
+int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
+{
+	mmf_venc_cfg_t cfg = {
+		.type = STREAM_SERVER_TYPE,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = fmt,
+		.jpg_quality = qlty,
+		.gop = 0,	// unused
+		.intput_fps = 30,
+		.output_fps = 30,
+		.bitrate = 3000,
+	};
+
+	return mmf_add_venc_channel(ch, &cfg);
+}
+#endif
+
+int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
+{
+	return mmf_enc_jpg_init(ch, w, h, fmt, qlty);
+}
+
+static char* file_to_string(const char *file, size_t max_len)
+{
+	char *m_ptr = NULL;
+	size_t m_capacity = 0;
+	FILE* fp = fopen(file, "rb");
+
+	if(fp) {
+		fseek(fp, 0, SEEK_END);
+		m_capacity = ftell(fp);
+		fseek(fp, 0, SEEK_SET);
+
+		if (max_len && m_capacity > max_len) {
+			m_capacity = max_len;
+		}
+		if (m_capacity) {
+			m_ptr = (char*)malloc(m_capacity+1);
+		}
+		if (m_ptr) {
+			fread(m_ptr, 1, m_capacity, fp);
+			m_ptr[m_capacity] = 0;
+		}
+
+		fclose(fp);
+	}
+
+	if (m_ptr) {
+	        uint8_t j=0;
+	        while (m_ptr[j] != '\0' && m_ptr[j] != '\r' && m_ptr[j] != '\n')
+			j++;
+		m_ptr[j] = 0;
+	}
+
+	return m_ptr;
+}
+
+static uint32_t file_to_uint(const char *file, uint32_t def)
+{
+	uint32_t ret = def;
+	char* str = file_to_string(file, 32);
+	if (str)
+	{
+		if (sscanf(str, "%u", &ret) != 1)
+			ret = def;
+		free(str);
+	}
+	return ret;
+}
+
+int kvm_cfg_read(void)
+{
+	kvm_cfg_t new_cfg;
+	int changed;
+
+	memset(&new_cfg, 0, sizeof(new_cfg));
+	new_cfg.width = file_to_uint("/kvmapp/kvm/width", 1920);
+	new_cfg.height = file_to_uint("/kvmapp/kvm/height", 1080);
+	new_cfg.fps = file_to_uint("/kvmapp/kvm/fps", 30);
+	new_cfg.qlty = file_to_uint("/kvmapp/kvm/qlty", 80);
+	new_cfg.res = file_to_uint("/kvmapp/kvm/res", 720);
+
+	changed = memcmp(&new_cfg, &kvm_cfg, sizeof(kvm_cfg));
+	if (!changed)
+		return changed;
+
+	if (new_cfg.width != kvm_cfg.width)
+		printf("kvm_cfg.width = %u\n", new_cfg.width);
+	if (new_cfg.height != kvm_cfg.height)
+		printf("kvm_cfg.height = %u\n", new_cfg.height);
+	if (new_cfg.fps != kvm_cfg.fps)
+		printf("kvm_cfg.fps = %u\n", new_cfg.fps);
+	if (new_cfg.qlty != kvm_cfg.qlty)
+		printf("kvm_cfg.qlty = %u\n", new_cfg.qlty);
+	if (new_cfg.res != kvm_cfg.res)
+		printf("kvm_cfg.res = %u\n", new_cfg.res);
+
+	memcpy(&kvm_cfg, &new_cfg, sizeof(kvm_cfg));
+
+	return changed;
+}
+
+// -------------------- mmf helpers end   --------------------
+
 int main(int argc, char *argv[]) {
 
     /* read command line arguments */
@@ -428,8 +727,169 @@ int main(int argc, char *argv[]) {
         input_separator_len = strlen(input_separator);
     }
 
+	// -------------------- mmf init begin --------------------
+	if (0 != mmf_init()) {
+		printf("mmf deinit\n");
+		return 0;
+	}
+
+	int img_w = 2560, img_h = 1440, img_fps = 30, fit = 0, img_fmt = PIXEL_FORMAT_NV21, img_qlty = 80;
+	(void)fit;
+	int ch = 0;
+	char *sensor_name = mmf_get_sensor_name();
+	if (!strcmp(sensor_name, "lt6911")) {
+		img_w = 1280; img_h = 720; img_fps = 60;
+	}
+
+	memset(&kvm_cfg, 0, sizeof(kvm_cfg));
+	kvm_cfg_read();
+
+	if (kvm_cfg.res == 1440) {
+		img_w = 2560; img_h = 1440;
+	}
+	if (kvm_cfg.res == 1080) {
+		img_w = 1920; img_h = 1080;
+	}
+	if (kvm_cfg.res == 720) {
+		img_w = 1280; img_h = 720;
+	}
+	if (kvm_cfg.res == 600) {
+		img_w =  800; img_h = 600;
+	}
+        if (kvm_cfg.res == 480) {
+                img_w = 640; img_h = 480;
+        }
+	img_fps = kvm_cfg.fps > 60 ? img_fps : (int32_t)kvm_cfg.fps;
+	img_qlty = (kvm_cfg.qlty < 50 || kvm_cfg.qlty > 100) ? img_qlty : (int32_t)kvm_cfg.qlty;
+
+	if (kvm_stream_venc_init(ch, img_w, img_h, img_fmt, img_qlty)) {
+		printf("kvm_stream_venc_init failed\n");
+		return -1;
+	}
+
+	uint8_t *filebuf = _prepare_image(img_w, img_h, img_fmt);
+
+	if (0 != mmf_vi_init()) {
+		DEBUG("mmf_vi_init failed!\r\n");
+		mmf_deinit();
+		return -1;
+	}
+
+	int vi_ch = mmf_get_vi_unused_channel();
+	if (0 != mmf_add_vi_channel_v2(vi_ch, img_w, img_h, img_fmt, img_fps, 2, !true, !true, 2, 3)) {
+		DEBUG("mmf_add_vi_channel failed!\r\n");
+		mmf_deinit();
+		return -1;
+	}
+
+	mmf_vi_set_pop_timeout(100);
+
+	//printf("http://%s:%d/stream\n", stream_server_get_ip(), stream_server_get_port());
+
+	uint64_t start = _get_time_us();
+	uint64_t last_loop_us = start;
+	uint64_t timestamp = 0;
+	uint64_t loop_count = 0;
+	int last_vi_pop = -1;
+	int last_size = 0;
+	// -------------------- mmf init end   --------------------
+
     while (running) {
-        size = read(STDIN_FILENO, input_buf, INPUT_BUF_LEN);
+	// -------------------- mmf loop begin --------------------
+	{
+		void *data;
+		int data_size, width, height, format;
+
+		if (!last_vi_pop) {
+			start = _get_time_us();
+			mmf_vi_frame_free(vi_ch);
+			DEBUG("use %ld us\r\n", _get_time_us() - start);
+		}
+
+		start = _get_time_us();
+		int vi_ret = mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format);
+		if (vi_ret != last_vi_pop) {
+			uint64_t vi_stamp = timestamp;
+			vi_stamp += (_get_time_us() - last_loop_us) / 1000;
+			printf("[%.6ld.%.3ld] %s\n", vi_stamp / 1000, vi_stamp % 1000,
+				vi_ret ? "no input signal" : "got input signal");
+			mmf_del_venc_channel(ch);
+			kvm_stream_venc_init(ch, img_w, img_h, img_fmt, img_qlty);
+			last_vi_pop = vi_ret;
+		}
+		if (vi_ret)
+			data = filebuf;
+		DEBUG("use %ld us\r\n", _get_time_us() - start);
+
+		start = _get_time_us();
+		if (mmf_venc_push(ch, data, img_w, img_h, img_fmt)) {
+			printf("mmf_venc_push failed\n");
+			break;
+		}
+		DEBUG("use %ld us\r\n", _get_time_us() - start);
+
+		start = _get_time_us();
+		mmf_stream_t stream;
+		stream.count = 0;
+		if (mmf_venc_pop(ch, &stream)) {
+			printf("mmf_venc_pop failed\n");
+			break;
+		}
+		DEBUG("use %ld us\r\n", _get_time_us() - start);
+
+		start = _get_time_us();
+		size = last_size;
+		{
+			int stream_size = 0;
+			for (int i = 0; i < stream.count; i ++) {
+				DEBUG("[%d] stream.data:%p stream.len:%d\n", i, stream.data[i], stream.data_size[i]);
+				stream_size += stream.data_size[i];
+			}
+
+			if (stream.count > 1) {
+				uint8_t *stream_buffer = (uint8_t *)malloc(stream_size);
+				if (stream_buffer) {
+					int copy_length = 0;
+					for (int i = 0; i < stream.count; i ++) {
+						memcpy(stream_buffer + copy_length, stream.data[i], stream.data_size[i]);
+						copy_length += stream.data_size[i];
+					}
+					if (!size && INPUT_BUF_LEN >= copy_length) {
+						last_size = copy_length;
+						size = last_size;
+						memcpy(&input_buf, stream_buffer, size);
+					}
+					loop_count++;
+					free(stream_buffer);
+				} else {
+					DEBUG("malloc failed!\r\n");
+				}
+			} else if (stream.count == 1) {
+				if (INPUT_BUF_LEN >= stream.data_size[0]) {
+					last_size = stream.data_size[0];
+					size = last_size;
+					memcpy(&input_buf, (uint8_t *)stream.data[0], size);
+				}
+				loop_count++;
+			}
+		}
+		DEBUG("use %ld us\r\n", _get_time_us() - start);
+
+		start = _get_time_us();
+		if (mmf_venc_free(ch)) {
+			printf("mmf_venc_free failed\n");
+			break;
+		}
+		DEBUG("use %ld us\r\n", _get_time_us() - start);
+
+		DEBUG("use %ld us\r\n", _get_time_us() - last_loop_us);
+		timestamp += (_get_time_us() - last_loop_us) / 1000;
+		last_loop_us = _get_time_us();
+	}
+	// -------------------- mmf loop end   --------------------
+
+	/* input_buf is filled by mmf */
+        //size = read(STDIN_FILENO, input_buf, INPUT_BUF_LEN);
         if (size < 0) {
             if (errno == EINTR) {
                 break;
@@ -467,12 +927,19 @@ int main(int argc, char *argv[]) {
             jpeg_size = rem_len;
         }
 
+        /* always use recent image */
+        jpeg_size = 0;
         memcpy(jpeg_buf + jpeg_size, input_buf, size);
         jpeg_size += size;
 
         /* look behind at most 2 * INPUT_BUF_LEN for a separator */
-        sep = (char *) memmem(jpeg_buf + jpeg_size - MIN(2 * INPUT_BUF_LEN, jpeg_size), MIN(2 * INPUT_BUF_LEN, jpeg_size),
-                input_separator, input_separator_len);
+        //sep = (char *) memmem(jpeg_buf + jpeg_size - MIN(2 * INPUT_BUF_LEN, jpeg_size), MIN(2 * INPUT_BUF_LEN, jpeg_size),
+        //        input_separator, input_separator_len);
+        /* no need to search we always get a full jpeg image */
+        if (auto_separator)
+                sep = jpeg_buf + jpeg_size - 2;
+        else
+                sep = jpeg_buf + jpeg_size;
 
         if (sep) { /* found a separator, jpeg frame is ready */
             if (auto_separator) {
@@ -593,6 +1060,20 @@ int main(int argc, char *argv[]) {
         ERROR("pthread_cond_destroy() failed");
         return -1;
     }
+
+	//  ------------------- mmf deinit begin --------------------
+	if (mmf_del_venc_channel(ch)) {
+		printf("mmf_del_venc_channel failed\n");
+		return -1;
+	}
+
+	mmf_del_vi_channel(vi_ch);
+	mmf_vi_deinit();
+	if (0 != mmf_deinit()) {
+		printf("mmf deinit\n");
+	}
+	free(filebuf);
+	// -------------------- mmf deinit end ----------------------
 
     INFO("bye!");
 
