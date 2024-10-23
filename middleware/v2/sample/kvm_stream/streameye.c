@@ -60,8 +60,8 @@ static kvm_cfg_t kvm_cfg;
 
 static int client_timeout = DEF_CLIENT_TIMEOUT;
 static int max_clients = 0;
-static int tcp_port = 0;
-static int listen_localhost = 0;
+static int tcp_port = 8000;
+static int listen_localhost = 1;
 static char *input_separator = NULL;
 static client_t **clients = NULL;
 static int num_clients = 0;
