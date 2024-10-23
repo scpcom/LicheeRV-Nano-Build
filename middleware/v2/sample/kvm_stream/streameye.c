@@ -57,6 +57,14 @@ typedef struct {
 static kvm_cfg_t kvm_cfg;
 
 typedef struct {
+	uint64_t last_update;
+	int now_fps;
+	int state;
+} kvm_state_t;
+
+static kvm_state_t kvm_state;
+
+typedef struct {
 	int img_w;
 	int img_h;
 	int img_fps;
@@ -515,6 +523,34 @@ static uint32_t file_to_uint(const char *file, uint32_t def)
 	return ret;
 }
 
+static int string_to_file(const char *file, char * str)
+{
+	char *m_ptr = str;
+	size_t m_capacity;
+	FILE* fp = fopen(file, "wb+");
+
+	if(fp) {
+		if (m_ptr) {
+			m_capacity = strlen(m_ptr);
+			fwrite(m_ptr, 1, m_capacity, fp);
+		}
+
+		fclose(fp);
+		return 0;
+	}
+
+	return -1;
+}
+
+static int uint_to_file(const char *file, uint32_t val)
+{
+	char str[32];
+	int len = snprintf(str, sizeof(str), "%u\n", val);
+	if (len > 0)
+		return string_to_file(file, str);
+	return -1;
+}
+
 int kvm_cfg_read(void)
 {
 	kvm_cfg_t new_cfg;
@@ -543,6 +579,48 @@ int kvm_cfg_read(void)
 		printf("kvm_cfg.res = %u\n", new_cfg.res);
 
 	memcpy(&kvm_cfg, &new_cfg, sizeof(kvm_cfg));
+
+	return changed;
+}
+
+int kvm_write_now_fps(double now_frame_int)
+{
+	int now_fps = 0;
+	uint64_t now_update = _get_time_us();
+	int changed;
+
+        if (now_frame_int > 0)
+		now_fps = (100 / now_frame_int + 15) / 100;
+
+	changed = now_fps != kvm_state.now_fps;
+	if (!changed)
+		return changed;
+
+	if ((now_update - kvm_state.last_update) < 1000 * 1000)
+		return 0;
+	if (MAX(now_fps, kvm_state.now_fps) - MIN(now_fps, kvm_state.now_fps) < 2)
+		return 0;
+
+	DEBUG("kvm_state.now_fps = %d\n", now_fps);
+	kvm_state.now_fps = now_fps;
+	kvm_state.last_update = now_update;
+
+	uint_to_file("/kvmapp/kvm/now_fps", kvm_state.now_fps);
+
+	return changed;
+}
+
+int kvm_write_state(int state)
+{
+	int changed = state != kvm_state.state;
+
+	if (!changed)
+		return changed;
+
+	printf("kvm_state.state = %d\n", state);
+	kvm_state.state = state;
+
+	uint_to_file("/kvmapp/kvm/state", kvm_state.state);
 
 	return changed;
 }
@@ -833,6 +911,10 @@ int main(int argc, char *argv[]) {
 	if (kvm_init_mmf_channels(mmf_cfg))
 		return -1;
 
+	memset(&kvm_state, 0, sizeof(kvm_state));
+	kvm_write_now_fps(0);
+	kvm_write_state(1);
+
 	//printf("http://%s:%d/stream\n", stream_server_get_ip(), stream_server_get_port());
 
 	uint64_t start = _get_time_us();
@@ -869,6 +951,7 @@ int main(int argc, char *argv[]) {
 				vi_ret ? "no input signal" : "got input signal");
 			mmf_del_venc_channel(mmf_cfg->enc_ch);
 			kvm_stream_venc_init(mmf_cfg->enc_ch, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt, mmf_cfg->img_qlty);
+			//kvm_write_state(vi_ret ? 0 : 1);
 			last_vi_pop = vi_ret;
 		}
 		if (vi_ret)
@@ -1030,6 +1113,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (sep) {
+            kvm_write_now_fps(frame_int);
             DEBUG("current fps: %.01lf", 1 / frame_int);
 
             if (num_clients) {
@@ -1116,6 +1200,9 @@ int main(int argc, char *argv[]) {
     }
 
 	//  ------------------- mmf deinit begin --------------------
+	kvm_write_state(0);
+	kvm_write_now_fps(0);
+
 	if (0 != kvm_deinit_mmf_channels(mmf_cfg))
 		return -1;
 
