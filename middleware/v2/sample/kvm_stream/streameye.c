@@ -56,6 +56,19 @@ typedef struct {
 
 static kvm_cfg_t kvm_cfg;
 
+typedef struct {
+	int img_w;
+	int img_h;
+	int img_fps;
+	int img_fmt;
+	int img_qlty;
+	int enc_ch;
+	int vi_ch;
+	uint8_t *filebuf;
+} kvm_mmf_t;
+
+static kvm_mmf_t kvm_mmf;
+
 // -------------------- mmf locals end   --------------------
 
 static int client_timeout = DEF_CLIENT_TIMEOUT;
@@ -534,6 +547,78 @@ int kvm_cfg_read(void)
 	return changed;
 }
 
+int kvm_deinit_mmf_channels(kvm_mmf_t *mmf_cfg)
+{
+	if (mmf_del_venc_channel(mmf_cfg->enc_ch)) {
+		printf("mmf_del_venc_channel failed\n");
+		return -1;
+	}
+
+	if (mmf_cfg->filebuf) {
+		free(mmf_cfg->filebuf);
+		mmf_cfg->filebuf = NULL;
+	}
+
+	mmf_del_vi_channel(mmf_cfg->vi_ch);
+
+	return 0;
+}
+
+int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
+{
+	mmf_cfg->img_w = 2560; mmf_cfg->img_h = 1440; mmf_cfg->img_fps = 30;
+	mmf_cfg->img_fmt = PIXEL_FORMAT_NV21; mmf_cfg->img_qlty = 80;
+
+	char *sensor_name = mmf_get_sensor_name();
+	if (!strcmp(sensor_name, "lt6911")) {
+		mmf_cfg->img_w = 1280; mmf_cfg->img_h = 720; mmf_cfg->img_fps = 60;
+	}
+
+	if (kvm_cfg.res == 1440) {
+		mmf_cfg->img_w = 2560; mmf_cfg->img_h = 1440;
+	}
+	if (kvm_cfg.res == 1080) {
+		mmf_cfg->img_w = 1920; mmf_cfg->img_h = 1080;
+	}
+	if (kvm_cfg.res == 720) {
+		mmf_cfg->img_w = 1280; mmf_cfg->img_h = 720;
+	}
+	if (kvm_cfg.res == 600) {
+		mmf_cfg->img_w =  800; mmf_cfg->img_h = 600;
+	}
+	if (kvm_cfg.res == 480) {
+		mmf_cfg->img_w = 640; mmf_cfg->img_h = 480;
+	}
+	mmf_cfg->img_fps = kvm_cfg.fps > 60 ? mmf_cfg->img_fps : (int32_t)kvm_cfg.fps;
+	mmf_cfg->img_qlty = (kvm_cfg.qlty < 50 || kvm_cfg.qlty > 100) ? mmf_cfg->img_qlty : (int32_t)kvm_cfg.qlty;
+
+	mmf_cfg->enc_ch = mmf_venc_unused_channel();
+	if (kvm_stream_venc_init(mmf_cfg->enc_ch, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt, mmf_cfg->img_qlty)) {
+		printf("kvm_stream_venc_init failed\n");
+		return -1;
+	}
+
+	mmf_cfg->filebuf = _prepare_image(mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt);
+
+	mmf_cfg->vi_ch = mmf_get_vi_unused_channel();
+	if (0 != mmf_add_vi_channel_v2(mmf_cfg->vi_ch, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt, mmf_cfg->img_fps, 2, !true, !true, 2, 3)) {
+		DEBUG("mmf_add_vi_channel failed!\r\n");
+		return -1;
+	}
+
+	mmf_vi_set_pop_timeout(100);
+
+	return 0;
+}
+
+int kvm_reset_mmf_channels(kvm_mmf_t *mmf_cfg)
+{
+	int ret = kvm_deinit_mmf_channels(mmf_cfg);
+	if (ret)
+		return ret;
+	return kvm_init_mmf_channels(mmf_cfg);
+}
+
 // -------------------- mmf helpers end   --------------------
 
 int main(int argc, char *argv[]) {
@@ -728,46 +813,12 @@ int main(int argc, char *argv[]) {
     }
 
 	// -------------------- mmf init begin --------------------
+	kvm_mmf_t *mmf_cfg = &kvm_mmf;
+
 	if (0 != mmf_init()) {
 		printf("mmf deinit\n");
 		return 0;
 	}
-
-	int img_w = 2560, img_h = 1440, img_fps = 30, fit = 0, img_fmt = PIXEL_FORMAT_NV21, img_qlty = 80;
-	(void)fit;
-	int ch = 0;
-	char *sensor_name = mmf_get_sensor_name();
-	if (!strcmp(sensor_name, "lt6911")) {
-		img_w = 1280; img_h = 720; img_fps = 60;
-	}
-
-	memset(&kvm_cfg, 0, sizeof(kvm_cfg));
-	kvm_cfg_read();
-
-	if (kvm_cfg.res == 1440) {
-		img_w = 2560; img_h = 1440;
-	}
-	if (kvm_cfg.res == 1080) {
-		img_w = 1920; img_h = 1080;
-	}
-	if (kvm_cfg.res == 720) {
-		img_w = 1280; img_h = 720;
-	}
-	if (kvm_cfg.res == 600) {
-		img_w =  800; img_h = 600;
-	}
-        if (kvm_cfg.res == 480) {
-                img_w = 640; img_h = 480;
-        }
-	img_fps = kvm_cfg.fps > 60 ? img_fps : (int32_t)kvm_cfg.fps;
-	img_qlty = (kvm_cfg.qlty < 50 || kvm_cfg.qlty > 100) ? img_qlty : (int32_t)kvm_cfg.qlty;
-
-	if (kvm_stream_venc_init(ch, img_w, img_h, img_fmt, img_qlty)) {
-		printf("kvm_stream_venc_init failed\n");
-		return -1;
-	}
-
-	uint8_t *filebuf = _prepare_image(img_w, img_h, img_fmt);
 
 	if (0 != mmf_vi_init()) {
 		DEBUG("mmf_vi_init failed!\r\n");
@@ -775,14 +826,12 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	int vi_ch = mmf_get_vi_unused_channel();
-	if (0 != mmf_add_vi_channel_v2(vi_ch, img_w, img_h, img_fmt, img_fps, 2, !true, !true, 2, 3)) {
-		DEBUG("mmf_add_vi_channel failed!\r\n");
-		mmf_deinit();
-		return -1;
-	}
+	memset(&kvm_cfg, 0, sizeof(kvm_cfg));
+	kvm_cfg_read();
 
-	mmf_vi_set_pop_timeout(100);
+	memset(&kvm_mmf, 0, sizeof(kvm_mmf));
+	if (kvm_init_mmf_channels(mmf_cfg))
+		return -1;
 
 	//printf("http://%s:%d/stream\n", stream_server_get_ip(), stream_server_get_port());
 
@@ -800,29 +849,34 @@ int main(int argc, char *argv[]) {
 		void *data;
 		int data_size, width, height, format;
 
+		if (kvm_cfg_read()) {
+			if (0 != kvm_reset_mmf_channels(mmf_cfg))
+				break;
+		}
+
 		if (!last_vi_pop) {
 			start = _get_time_us();
-			mmf_vi_frame_free(vi_ch);
+			mmf_vi_frame_free(mmf_cfg->vi_ch);
 			DEBUG("use %ld us\r\n", _get_time_us() - start);
 		}
 
 		start = _get_time_us();
-		int vi_ret = mmf_vi_frame_pop(vi_ch, &data, &data_size, &width, &height, &format);
+		int vi_ret = mmf_vi_frame_pop(mmf_cfg->vi_ch, &data, &data_size, &width, &height, &format);
 		if (vi_ret != last_vi_pop) {
 			uint64_t vi_stamp = timestamp;
 			vi_stamp += (_get_time_us() - last_loop_us) / 1000;
 			printf("[%.6ld.%.3ld] %s\n", vi_stamp / 1000, vi_stamp % 1000,
 				vi_ret ? "no input signal" : "got input signal");
-			mmf_del_venc_channel(ch);
-			kvm_stream_venc_init(ch, img_w, img_h, img_fmt, img_qlty);
+			mmf_del_venc_channel(mmf_cfg->enc_ch);
+			kvm_stream_venc_init(mmf_cfg->enc_ch, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt, mmf_cfg->img_qlty);
 			last_vi_pop = vi_ret;
 		}
 		if (vi_ret)
-			data = filebuf;
+			data = mmf_cfg->filebuf;
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_venc_push(ch, data, img_w, img_h, img_fmt)) {
+		if (mmf_venc_push(mmf_cfg->enc_ch, data, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt)) {
 			printf("mmf_venc_push failed\n");
 			break;
 		}
@@ -831,7 +885,7 @@ int main(int argc, char *argv[]) {
 		start = _get_time_us();
 		mmf_stream_t stream;
 		stream.count = 0;
-		if (mmf_venc_pop(ch, &stream)) {
+		if (mmf_venc_pop(mmf_cfg->enc_ch, &stream)) {
 			printf("mmf_venc_pop failed\n");
 			break;
 		}
@@ -876,7 +930,7 @@ int main(int argc, char *argv[]) {
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_venc_free(ch)) {
+		if (mmf_venc_free(mmf_cfg->enc_ch)) {
 			printf("mmf_venc_free failed\n");
 			break;
 		}
@@ -1062,17 +1116,14 @@ int main(int argc, char *argv[]) {
     }
 
 	//  ------------------- mmf deinit begin --------------------
-	if (mmf_del_venc_channel(ch)) {
-		printf("mmf_del_venc_channel failed\n");
+	if (0 != kvm_deinit_mmf_channels(mmf_cfg))
 		return -1;
-	}
 
-	mmf_del_vi_channel(vi_ch);
 	mmf_vi_deinit();
+
 	if (0 != mmf_deinit()) {
 		printf("mmf deinit\n");
 	}
-	free(filebuf);
 	// -------------------- mmf deinit end ----------------------
 
     INFO("bye!");
