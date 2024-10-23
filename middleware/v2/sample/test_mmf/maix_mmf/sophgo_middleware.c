@@ -3428,8 +3428,7 @@ int mmf_venc_pop(int ch, mmf_stream_t *stream)
 		stream->count = priv.enc_chn_stream[ch].u32PackCount;
 		if (stream->count > 8) {
 			printf("pack count is too large! cnt:%d\r\n", stream->count);
-			free(priv.enc_chn_stream[ch].pstPack);
-			priv.enc_chn_stream[ch].pstPack = NULL;
+			mmf_venc_free(ch);
 			return -1;
 		}
 		for (int i = 0; i < stream->count; i++) {
@@ -3451,13 +3450,15 @@ int mmf_venc_free(int ch)
 		return s32Ret;
 	}
 
-	if (priv.enc_chn_stream[ch].pstPack)
-		free(priv.enc_chn_stream[ch].pstPack);
+	if (priv.enc_chn_stream[ch].pstPack) {
+		s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_chn_stream[ch]);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
+			return s32Ret;
+		}
 
-	s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_chn_stream[ch]);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
-		return s32Ret;
+		free(priv.enc_chn_stream[ch].pstPack);
+		priv.enc_chn_stream[ch].pstPack = NULL;
 	}
 
 	priv.enc_chn_running[ch] = 0;
