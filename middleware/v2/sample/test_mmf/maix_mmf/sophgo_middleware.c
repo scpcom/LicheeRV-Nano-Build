@@ -275,9 +275,9 @@ void mmf_dump_frame(VIDEO_FRAME_INFO_S *frame) {
 	printf("u32Length[0]:\t\t%d\n", vframe->u32Length[0]);
 	printf("u32Length[1]:\t\t%d\n", vframe->u32Length[1]);
 	printf("u32Length[2]:\t\t%d\n", vframe->u32Length[2]);
-	printf("u64PhyAddr[0]:\t\t%#lx\n", vframe->u64PhyAddr[0]);
-	printf("u64PhyAddr[1]:\t\t%#lx\n", vframe->u64PhyAddr[1]);
-	printf("u64PhyAddr[2]:\t\t%#lx\n", vframe->u64PhyAddr[2]);
+	printf("u64PhyAddr[0]:\t\t%#llx\n", vframe->u64PhyAddr[0]);
+	printf("u64PhyAddr[1]:\t\t%#llx\n", vframe->u64PhyAddr[1]);
+	printf("u64PhyAddr[2]:\t\t%#llx\n", vframe->u64PhyAddr[2]);
 	printf("pu8VirAddr[0]:\t\t%p\n", vframe->pu8VirAddr[0]);
 	printf("pu8VirAddr[1]:\t\t%p\n", vframe->pu8VirAddr[1]);
 	printf("pu8VirAddr[2]:\t\t%p\n", vframe->pu8VirAddr[2]);
@@ -315,14 +315,14 @@ static int _free_leak_memory_of_ion(void)
 			if (strcmp(buffer_name, "VI_DMA_BUF")
 				&& strcmp(buffer_name, "ISP_SHARED_BUFFER_0"))
 				continue;
-			struct sys_ion_data2 ion_data = {
-				.cached = 1,
-				.dmabuf_fd = (uint32_t)-1,
-			};
+			struct sys_ion_data2 ion_data;
 
             alloc_buf_size = atoi(alloc_buf_size_str);
             phy_addr = (unsigned int)strtol(phy_addr_str, NULL, 16);
 
+			memset(&ion_data, 0, sizeof(ion_data));
+			ion_data.cached = 1;
+			ion_data.dmabuf_fd = (uint32_t)-1;
 			ion_data.size = alloc_buf_size;
 			ion_data.addr_p = phy_addr;
 			memset(ion_data.name, 0, sizeof(ion_data.name));
@@ -418,8 +418,32 @@ static VIDEO_FRAME_INFO_S *_mmf_alloc_frame(int id, SIZE_S stSize, PIXEL_FORMAT_
 
 static CVI_S32 _mmf_free_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
 {
-	VIDEO_FRAME_S *pstVFrame = &pstVideoFrame->stVFrame;
+	VIDEO_FRAME_S *pstVFrame;
 	VB_BLK blk;
+	CVI_U32 u32VBSize = 0;
+
+	if (!pstVideoFrame)
+		return CVI_FAILURE;
+
+	pstVFrame = &pstVideoFrame->stVFrame;
+
+	if (pstVFrame->pu8VirAddr[2] == (CVI_U8 *)pstVFrame->pu8VirAddr[1] + pstVFrame->u32Length[1])
+	{
+		u32VBSize += pstVFrame->u32Length[2];
+		pstVFrame->u32Length[2] = 0;
+		pstVFrame->pu8VirAddr[2] = NULL;
+	}
+	if (pstVFrame->pu8VirAddr[1] == (CVI_U8 *)pstVFrame->pu8VirAddr[0] + pstVFrame->u32Length[0])
+	{
+		u32VBSize += pstVFrame->u32Length[1];
+		pstVFrame->u32Length[1] = 0;
+		pstVFrame->pu8VirAddr[1] = NULL;
+	}
+	if (pstVFrame->pu8VirAddr[0])
+	{
+		u32VBSize += pstVFrame->u32Length[0];
+		pstVFrame->u32Length[0] = u32VBSize;
+	}
 
 	if (pstVFrame->pu8VirAddr[0])
 		CVI_SYS_Munmap((CVI_VOID *)pstVFrame->pu8VirAddr[0], pstVFrame->u32Length[0]);
@@ -1085,9 +1109,10 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 #if 1
 	VPSS_GRP_ATTR_S stGrpAttr;
 	VPSS_CROP_INFO_S   stChnCropInfo;
-	VPSS_CHN_ATTR_S chn_attr = {0};
+	VPSS_CHN_ATTR_S chn_attr;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
+	memset(&chn_attr, 0, sizeof(chn_attr));
 	s32Ret = CVI_VPSS_GetGrpAttr(VpssGrp, &stGrpAttr);
 	if (s32Ret != CVI_SUCCESS) {
 		SAMPLE_PRT("CVI_VPSS_GetGrpAttr failed. s32Ret: 0x%x !\n", s32Ret);
@@ -2866,7 +2891,8 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	{
-		VENC_H265_TRANS_S h265Trans = {0};
+		VENC_H265_TRANS_S h265Trans;
+		memset(&h265Trans, 0, sizeof(h265Trans));
 		s32Ret = CVI_VENC_GetH265Trans(ch, &h265Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH265Trans failed with %d\n", s32Ret);
@@ -2882,7 +2908,8 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	{
-		VENC_H265_VUI_S h265Vui = {0};
+		VENC_H265_VUI_S h265Vui;
+		memset(&h265Vui, 0, sizeof(h265Vui));
 		s32Ret = CVI_VENC_GetH265Vui(ch, &h265Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH265Vui failed with %d\n", s32Ret);
@@ -3051,7 +3078,8 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	{
-		VENC_H264_TRANS_S h264Trans = {0};
+		VENC_H264_TRANS_S h264Trans;
+		memset(&h264Trans, 0, sizeof(h264Trans));
 		s32Ret = CVI_VENC_GetH264Trans(ch, &h264Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH264Trans failed with %d\n", s32Ret);
@@ -3070,7 +3098,8 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	{
-		VENC_H264_VUI_S h264Vui = {0};
+		VENC_H264_VUI_S h264Vui;
+		memset(&h264Vui, 0, sizeof(h264Vui));
 		s32Ret = CVI_VENC_GetH264Vui(ch, &h264Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH264Vui failed with %d\n", s32Ret);
@@ -3399,8 +3428,7 @@ int mmf_venc_pop(int ch, mmf_stream_t *stream)
 		stream->count = priv.enc_chn_stream[ch].u32PackCount;
 		if (stream->count > 8) {
 			printf("pack count is too large! cnt:%d\r\n", stream->count);
-			free(priv.enc_chn_stream[ch].pstPack);
-			priv.enc_chn_stream[ch].pstPack = NULL;
+			mmf_venc_free(ch);
 			return -1;
 		}
 		for (int i = 0; i < stream->count; i++) {
@@ -3422,13 +3450,15 @@ int mmf_venc_free(int ch)
 		return s32Ret;
 	}
 
-	if (priv.enc_chn_stream[ch].pstPack)
-		free(priv.enc_chn_stream[ch].pstPack);
+	if (priv.enc_chn_stream[ch].pstPack) {
+		s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_chn_stream[ch]);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
+			return s32Ret;
+		}
 
-	s32Ret = CVI_VENC_ReleaseStream(ch, &priv.enc_chn_stream[ch]);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_ReleaseStream failed with %#x\n", s32Ret);
-		return s32Ret;
+		free(priv.enc_chn_stream[ch].pstPack);
+		priv.enc_chn_stream[ch].pstPack = NULL;
 	}
 
 	priv.enc_chn_running[ch] = 0;
@@ -3804,7 +3834,7 @@ void mmf_set_vi_vflip(int ch, bool en)
 
 void mmf_get_vo_video_hmirror(int ch, bool *en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
@@ -3817,7 +3847,7 @@ void mmf_get_vo_video_hmirror(int ch, bool *en)
 
 void mmf_set_vo_video_hmirror(int ch, bool en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
@@ -3827,7 +3857,7 @@ void mmf_set_vo_video_hmirror(int ch, bool en)
 
 void mmf_get_vo_video_flip(int ch, bool *en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
@@ -3840,7 +3870,7 @@ void mmf_get_vo_video_flip(int ch, bool *en)
 
 void mmf_set_vo_video_flip(int ch, bool en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
+	if (ch > MMF_VO_VIDEO_MAX_CHN) {
 		printf("invalid ch, must be [0, %d)\r\n", ch);
 		return;
 	}
