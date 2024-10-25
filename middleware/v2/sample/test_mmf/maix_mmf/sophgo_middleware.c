@@ -627,6 +627,12 @@ int _try_release_vio_all(void)
 	return s32Ret;
 }
 
+void mmf_pre_config_sys(mmf_sys_cfg_t *cfg)
+{
+	UNUSED(cfg);
+	// TODO support custom buffer pools
+}
+
 static void _mmf_sys_exit(void)
 {
 	if (g_stViConfig.s32WorkingViNum != 0) {
@@ -1317,6 +1323,24 @@ static CVI_S32 _mmf_vpss_init_new_with_fps(VPSS_GRP VpssGrp, CVI_U32 width, CVI_
 static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
 {
 	return _mmf_vpss_init_new_with_fps(VpssGrp, width, height, format, 60);
+}
+
+int mmf_vi_init2(mmf_vi_cfg_t *vi_info)
+{
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (priv.vi_is_inited) {
+		return s32Ret;
+	}
+
+	priv.vi_format = (PIXEL_FORMAT_E)vi_info->fmt;
+	priv.vi_size.u32Width = vi_info->w;
+	priv.vi_size.u32Height = vi_info->h;
+
+	s32Ret = _mmf_vpss_init_new_with_fps(0, priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format, vi_info->fps);
+
+	priv.vi_is_inited = true;
+
+	return s32Ret;
 }
 
 int mmf_vi_init(void)
