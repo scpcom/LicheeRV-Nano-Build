@@ -54,6 +54,7 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_FUNC_GET_PARAM_NUM(x)       ((x & 0xff))
 #endif
 
+#define MMF_DEC_MAX_CHN			2
 #define MMF_ENC_MAX_CHN			2
 #define MMF_VI_MAX_CHN 			2		// manually limit the max channel number of vi
 #define MMF_VO_VIDEO_MAX_CHN 	1		// manually limit the max channel number of vo
@@ -68,6 +69,9 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_VB_USER_ID			2
 #define MMF_VB_ENC_H26X_ID		3
 #define MMF_VB_ENC_JPEG_ID		4
+// TODO: re-organize buffer pools
+#define MMF_VB_DEC_H26X_ID		MMF_VB_ENC_JPEG_ID
+#define MMF_VB_DEC_JPEG_ID		MMF_VB_ENC_H26X_ID
 
 #if VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN
 #error "VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN"
@@ -124,6 +128,17 @@ typedef struct {
 	VENC_STREAM_S enc_chn_stream[MMF_ENC_MAX_CHN];
 	mmf_venc_cfg_t enc_chn_cfg[MMF_ENC_MAX_CHN];
 
+	int dec_pop_timeout;
+	int dec_chn_type[MMF_DEC_MAX_CHN];
+	int dec_chn_vb_id[MMF_DEC_MAX_CHN];
+	int dec_chn_vpss[MMF_DEC_MAX_CHN];
+	int dec_chn_is_init[MMF_DEC_MAX_CHN];
+	int dec_chn_running[MMF_DEC_MAX_CHN];
+	VIDEO_FRAME_INFO_S dec_chn_frame[MMF_DEC_MAX_CHN];
+	VIDEO_FRAME_INFO_S *dec_pst_frame[MMF_DEC_MAX_CHN];
+	VDEC_STREAM_S dec_chn_stream[MMF_DEC_MAX_CHN];
+	mmf_vdec_cfg_t dec_chn_cfg[MMF_DEC_MAX_CHN];
+
 	int vb_of_vi_is_config : 1;
 	int vb_of_vo_is_config : 1;
 	int vb_of_private_is_config : 1;
@@ -155,12 +170,16 @@ static int mmf_venc_deinit(int ch);
 static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
 static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
 
+static int mmf_vdec_deinit(int ch);
+static int _mmf_vdec_push(int ch, VDEC_STREAM_S *stStream);
+
 #define DISP_W	640
 #define DISP_H	480
 static void priv_param_init(void)
 {
 	priv.vi_pop_timeout = 100;
 	priv.vo_rotate = 90;
+	priv.dec_pop_timeout = 1000;
 
 	priv.vb_conf.u32MaxPoolCnt = 1;
 	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
@@ -3589,9 +3608,664 @@ static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality)
 	return mmf_add_venc_channel(ch, &cfg);
 }
 
-int mmf_add_vdec_channel(int ch, int format_out, mmf_vdec_cfg_t *cfg)
+static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 {
+	int format_in = PIXEL_FORMAT_YUV_PLANAR_444; //PIXEL_FORMAT_YUV_PLANAR_420;
+
+	if (priv.dec_chn_is_init[ch])
+		return 0;
+
+	if ((format_out == PIXEL_FORMAT_RGB_888 && chn_attr->u32PicWidth * chn_attr->u32PicHeight * 3 > 640 * 480 * 3)
+		|| (format_out == PIXEL_FORMAT_NV21 && chn_attr->u32PicWidth * chn_attr->u32PicHeight * 3 / 2 > 2560 * 1440 * 3 / 2)) {
+		printf("image size is too large, for NV21, maximum resolution 2560x1440, for RGB888, maximum resolution 640x480!\n");
+		return -1;
+	}
+
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+	s32Ret = CVI_VDEC_ResetChn(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+	s32Ret = CVI_VDEC_DestroyChn(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_DestoryChn [%d] failed with %#x\n", ch, s32Ret);
+	}
+
+	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+	priv.dec_chn_vpss[ch] = VPSS_INVALID_GRP;
+
+	switch (format_out) {
+	case PIXEL_FORMAT_RGB_888:
+		//fallthrough;
+	case PIXEL_FORMAT_NV21:
+	{
+		CVI_U32 w = chn_attr->u32PicWidth;
+		CVI_U32 h = chn_attr->u32PicHeight;
+		int fps_out = 30;
+		VPSS_GRP out_grp = CVI_VPSS_GetAvailableGrp();
+
+		if (out_grp == VPSS_INVALID_GRP) {
+			printf("VPSS get group failed\n");
+			CVI_VDEC_DestroyChn(ch);
+			return CVI_FAILURE;
+		}
+
+		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){w, h}, (SIZE_S){w, h}, (PIXEL_FORMAT_E)format_in, (PIXEL_FORMAT_E)format_out, fps_out, 0, CVI_FALSE, CVI_FALSE, 0);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS init failed with %d\n", s32Ret);
+			CVI_VDEC_DestroyChn(ch);
+			return s32Ret;
+		}
+
+#if 0
+		s32Ret = SAMPLE_COMM_VPSS_Bind_VDEC(out_grp, ch, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS bind VDEC failed with %#x\n", s32Ret);
+			_mmf_vpss_deinit(out_grp, ch);
+			CVI_VDEC_StopRecvStream(ch);
+			CVI_VDEC_DestroyChn(ch);
+			return s32Ret;
+		}
+#endif
+
+		priv.dec_chn_vpss[ch] = out_grp;
+		break;
+	}
+	case PIXEL_FORMAT_YUV_PLANAR_420:
+	case PIXEL_FORMAT_YUV_PLANAR_444:
+		break;
+	default:
+		printf("unknown format %d (want %d)!\n", format_out, PIXEL_FORMAT_NV21);
+		CVI_VDEC_StopRecvStream(ch);
+		CVI_VDEC_DestroyChn(ch);
+		return -1;
+	}
+
+	VDEC_CHN_PARAM_S stChnParam;
+	s32Ret = CVI_VDEC_GetChnParam(ch, &stChnParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_GetChnParam failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	stChnParam.enPixelFormat = (PIXEL_FORMAT_E)format_in; //(PIXEL_FORMAT_E)format_out;
+	stChnParam.u32DisplayFrameNum = chn_attr->u32FrameBufCnt - 1;
+
+	s32Ret = CVI_VDEC_SetChnParam(ch, &stChnParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_SetChnParam failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	s32Ret = CVI_VDEC_StartRecvStream(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_StartRecvPic failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	priv.dec_chn_type[ch] = PT_JPEG;
+	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_JPEG_ID;
+
+	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
+	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
+	priv.dec_chn_cfg[ch].fmt = format_out;
+	priv.dec_chn_cfg[ch].buffer_num = chn_attr->u32FrameBufCnt;
+	priv.dec_chn_is_init[ch] = 1;
+	priv.dec_chn_running[ch] = 0;
+
+	return s32Ret;
+}
+
+int mmf_dec_jpg_init(int ch, int w, int h, int format)
+{
+	mmf_vdec_cfg_t cfg = {
+		.type = 4,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = format,
+		.buffer_num = 1,
+	};
+
+	return mmf_add_vdec_channel(ch, &cfg);
+}
+
+int mmf_dec_jpg_deinit(int ch)
+{
+	return  mmf_vdec_deinit(ch);
+}
+
+static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
+{
+	if (priv.dec_chn_is_init[ch])
+		return 0;
+
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_CreateChn [%d] failed with %d\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+	VDEC_CHN_PARAM_S stChnParam;
+	s32Ret = CVI_VDEC_GetChnParam(ch, &stChnParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_GetChnParam failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	stChnParam.enPixelFormat = (PIXEL_FORMAT_E)format_out;
+	stChnParam.u32DisplayFrameNum = chn_attr->u32FrameBufCnt - 1;
+
+	s32Ret = CVI_VDEC_SetChnParam(ch, &stChnParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_SetChnParam failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	s32Ret = CVI_VDEC_StartRecvStream(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_StartRecvPic failed with %d\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	priv.dec_chn_type[ch] = PT_H265;
+	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_H26X_ID;
+
+	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
+	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
+	priv.dec_chn_cfg[ch].fmt = format_out;
+	priv.dec_chn_cfg[ch].buffer_num = chn_attr->u32FrameBufCnt;
+	priv.dec_chn_running[ch] = 0;
+	priv.dec_chn_is_init[ch] = 1;
+
+	return s32Ret;
+}
+
+int mmf_dec_h265_init(int ch, int w, int h)
+{
+	mmf_vdec_cfg_t cfg = {
+		.type = 1,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = PIXEL_FORMAT_NV21,
+		.buffer_num = 1,
+	};
+
+	return mmf_add_vdec_channel(ch, &cfg);
+}
+
+static int _mmf_dec_h264_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
+{
+	if (priv.dec_chn_is_init[ch])
+		return 0;
+
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_CreateChn [%d] failed with %d\n", ch, s32Ret);
+		return s32Ret;
+	}
+
+#if 0
+	VDEC_MOD_PARAM_S stModParam;
+	CVI_VDEC_GetModParam(&stModParam);
+	stModParam.enVdecVBSource = VB_SOURCE_COMMON;
+	CVI_VDEC_SetModParam(&stModParam);
+#endif
+
+	VDEC_CHN_PARAM_S stChnParam;
+	s32Ret = CVI_VDEC_GetChnParam(ch, &stChnParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_GetChnParam failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	stChnParam.enPixelFormat = (PIXEL_FORMAT_E)format_out;
+	stChnParam.u32DisplayFrameNum = chn_attr->u32FrameBufCnt - 1;
+
+	s32Ret = CVI_VDEC_SetChnParam(ch, &stChnParam);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_SetChnParam failed with %#x\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	s32Ret = CVI_VDEC_StartRecvStream(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_StartRecvPic failed with %d\n", s32Ret);
+		return CVI_FAILURE;
+	}
+
+	priv.dec_chn_type[ch] = PT_H264;
+	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_H26X_ID;
+
+	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
+	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
+	priv.dec_chn_cfg[ch].fmt = format_out;
+	priv.dec_chn_cfg[ch].buffer_num = chn_attr->u32FrameBufCnt;
+	priv.dec_chn_running[ch] = 0;
+	priv.dec_chn_is_init[ch] = 1;
+
+	return s32Ret;
+}
+
+int mmf_dec_h264_init(int ch, int w, int h)
+{
+	mmf_vdec_cfg_t cfg = {
+		.type = 2,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.w = w,
+		.h = h,
+		.fmt = PIXEL_FORMAT_NV21,
+		.buffer_num = 1,
+	};
+
+	return mmf_add_vdec_channel(ch, &cfg);
+}
+
+static int mmf_vdec_deinit(int ch)
+{
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.dec_chn_is_init[ch]) {
+		return 0;
+	}
+
+#if 0
+	VIDEO_FRAME_INFO_S frame;
+	if (!mmf_vdec_pop(ch, &frame)) {
+		mmf_vdec_free(ch);
+	}
+#endif
+
+	if (priv.dec_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		VPSS_GRP out_grp = priv.dec_chn_vpss[ch];
+
+#if 0
+		s32Ret = SAMPLE_COMM_VPSS_UnBind_VDEC(out_grp, ch, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS unbind VDEC failed with %d\n", s32Ret);
+		}
+#endif
+
+		s32Ret = _mmf_vpss_deinit(out_grp, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS deinit failed with %d\n", s32Ret);
+		}
+	}
+
+	s32Ret = CVI_VDEC_StopRecvStream(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_StopRecvPic failed with %d\n", s32Ret);
+	}
+
+	s32Ret = CVI_VDEC_ResetChn(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_ResetChn vechn[%d] failed with %#x!\n", ch, s32Ret);
+	}
+
+	s32Ret = CVI_VDEC_DestroyChn(ch);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_DestroyChn [%d] failed with %d\n", ch, s32Ret);
+	}
+
+	priv.dec_chn_cfg[ch].w = 0;
+	priv.dec_chn_cfg[ch].h = 0;
+	priv.dec_chn_cfg[ch].fmt = 0;
+	priv.dec_chn_cfg[ch].buffer_num = 0;
+	priv.dec_chn_running[ch] = 0;
+	priv.dec_chn_is_init[ch] = 0;
+
+	return s32Ret;
+}
+
+static int _mmf_vdec_push(int ch, VDEC_STREAM_S *stStream)
+{
+	int out_ch = ch;
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
+	if (priv.dec_chn_running[ch]) {
+		return s32Ret;
+	}
+
+	s32Ret = CVI_VDEC_SendStream(out_ch, stStream, 1000);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VDEC_SendStream failed with %d\n", s32Ret);
+		return s32Ret;
+	}
+
+	if (stStream->bDisplay)
+		priv.dec_chn_running[ch] = 1;
+
+	return s32Ret;
+}
+
+int mmf_vdec_push(int ch, uint8_t *data, int size, uint8_t is_start, uint8_t is_end)
+{
+	VDEC_STREAM_S *stStream;
+	UNUSED(is_start);
+
+	if (ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
+	if (!data && (size != 0)) {
+		return -1;
+	}
+
+	stStream = &priv.dec_chn_stream[ch];
+	memset(stStream, 0, sizeof(*stStream));
+
+	stStream->u64PTS = 0;
+	stStream->pu8Addr = data;
+	stStream->u32Len = size;
+	stStream->bEndOfFrame = (size != 0) ? CVI_TRUE : CVI_FALSE;
+	stStream->bEndOfStream = is_end ? CVI_TRUE : CVI_FALSE;
+	stStream->bDisplay = (size != 0) ? 1 : 0;
+
+	return _mmf_vdec_push(ch, &priv.dec_chn_stream[ch]);
+}
+
+static int _mmf_vdec_pop(int ch, VIDEO_FRAME_INFO_S *frame)
+{
+	VPSS_GRP out_grp = 0;
+	VIDEO_FRAME_INFO_S stVdecFrame;
+
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		printf("invalid ch %d\n", ch);
+		return -1;
+	}
+	if (!priv.dec_chn_is_init[ch]) {
+		printf("dec ch %d not open\n", ch);
+		return -1;
+	}
+	if (!priv.dec_chn_running[ch]) {
+		return -1;
+	}
+	if (frame == NULL) {
+		printf("invalid param\n");
+		return -1;
+	}
+
+	int fd = CVI_VDEC_GetFd(ch);
+	if (fd < 0) {
+		printf("CVI_VDEC_GetFd failed with %d\n", fd);
+		return -1;
+	}
+
+	fd_set readFds;
+	struct timeval timeoutVal;
+	FD_ZERO(&readFds);
+	FD_SET(fd, &readFds);
+	timeoutVal.tv_sec = 0;
+	timeoutVal.tv_usec = 80*1000;
+	s32Ret = select(fd + 1, &readFds, NULL, NULL, &timeoutVal);
+	if (s32Ret < 0) {
+		if (errno == EINTR) {
+			printf("VdecChn(%d) select failed!\n", ch);
+			return -1;
+		}
+	} else if (s32Ret == 0) {
+		printf("VdecChn(%d) select timeout!\n", ch);
+		return -1;
+	}
+
+	if (priv.dec_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		out_grp = priv.dec_chn_vpss[ch];
+		memset(&stVdecFrame, 0, sizeof(stVdecFrame));
+
+		s32Ret = CVI_VDEC_GetFrame(ch, &stVdecFrame, priv.dec_pop_timeout);
+		if  (s32Ret != CVI_SUCCESS) {
+				printf("%s: CVI_VDEC_GetFrame falied.\n", __func__);
+			return -1;
+		}
+
+		//set_vpss_AspectRatio(i, out_grp, ch, &pstVdecChn->stDispRect);
+		s32Ret = CVI_VPSS_SendFrame(out_grp, &stVdecFrame, 1000);
+
+		if (s32Ret != CVI_SUCCESS) {
+			CVI_VDEC_ReleaseFrame(ch, &stVdecFrame);
+				printf("%s: CVI_VPSS_SendFrame falied.\n", __func__);
+			return -1;
+		}
+
+		s32Ret = CVI_VPSS_GetChnFrame(out_grp, ch, frame, 1000);
+		CVI_VDEC_ReleaseFrame(ch, &stVdecFrame);
+		if (s32Ret != CVI_SUCCESS) {
+			CVI_TRACE_LOG(CVI_DBG_ERR, "CVI_VPSS_GetChnFrame fail, grp:%d\n", out_grp);
+			return -1;
+		}
+
+		int image_size = 0;
+		for (int b = 0; b < 3; b++) if (frame->stVFrame.u64PhyAddr[b])
+		{
+			CVI_VOID *vir_addr;
+			CVI_U32 vir_size = frame->stVFrame.u32Length[b];
+			vir_addr = CVI_SYS_MmapCache(frame->stVFrame.u64PhyAddr[b], vir_size);
+			CVI_SYS_IonInvalidateCache(frame->stVFrame.u64PhyAddr[b], vir_addr, vir_size);
+			frame->stVFrame.pu8VirAddr[b] = (CVI_U8 *)vir_addr;
+			image_size += vir_size;
+		}
+
+		// printf("width: %d, height: %d, total_buf_length: %d, phy:%#lx  vir:%p\n",
+		// 	   frame->stVFrame.u32Width,
+		// 	   frame->stVFrame.u32Height, image_size,
+		// 	   frame->stVFrame.u64PhyAddr[0], vir_addr);
+
+	} else {
+		s32Ret = CVI_VDEC_GetFrame(ch, frame, priv.dec_pop_timeout);
+
+		// map already done by CVI_VDEC_GetFrame
+	}
+
+	if (s32Ret == 0) {
+		priv.dec_pst_frame[ch] = frame;
+
+		return 0;
+	}
+
+	return s32Ret;
+}
+
+int mmf_vdec_pop(int ch, void **data, int *len, int *width, int *height, int *format)
+{
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		printf("invalid ch %d\n", ch);
+		return -1;
+	}
+	if (data == NULL || len == NULL || width == NULL || height == NULL || format == NULL) {
+		printf("invalid param\n");
+		return -1;
+	}
+
+	VIDEO_FRAME_INFO_S *frame = &priv.dec_chn_frame[ch];
+	CVI_S32 s32Ret = _mmf_vdec_pop(ch, frame);
+	if (s32Ret != 0) {
+		return s32Ret;
+	}
+
+	int image_size = frame->stVFrame.u32Length[0]
+		       + frame->stVFrame.u32Length[1]
+		       + frame->stVFrame.u32Length[2];
+
+	*data = frame->stVFrame.pu8VirAddr[0];
+	*len = image_size;
+	*width = frame->stVFrame.u32Width;
+	*height = frame->stVFrame.u32Height;
+	*format = frame->stVFrame.enPixelFormat;
+
+	return s32Ret;
+}
+
+int mmf_vdec_free(int ch)
+{
+	int out_grp = 0;
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		printf("invalid ch %d\n", ch);
+		return -1;
+	}
+	if (!priv.dec_chn_is_init[ch]) {
+		printf("dec ch %d not open\n", ch);
+		return -1;
+	}
+        if (!priv.dec_chn_running[ch]) {
+                return s32Ret;
+        }
+
+	VIDEO_FRAME_INFO_S *frame = priv.dec_pst_frame[ch];
+	if (!frame)
+	{
+		priv.dec_chn_running[ch] = 0;
+		return s32Ret;
+	}
+
+	if (priv.dec_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		out_grp = priv.dec_chn_vpss[ch];
+
+		for (int b = 0; b < 3; b++) if (frame->stVFrame.pu8VirAddr[b])
+		{
+			CVI_VOID *vir_addr = frame->stVFrame.pu8VirAddr[b];
+			CVI_U32 vir_size = frame->stVFrame.u32Length[b];
+			CVI_SYS_Munmap(vir_addr, vir_size);
+			frame->stVFrame.pu8VirAddr[b] = NULL;
+		}
+
+		s32Ret = CVI_VPSS_ReleaseChnFrame(out_grp, ch, frame);
+	} else {
+		// unmap will be done by CVI_VDEC_ReleaseFrame
+
+		s32Ret = CVI_VDEC_ReleaseFrame(ch, frame);
+	}
+
+	if (s32Ret != 0) {
+		SAMPLE_PRT("CVI_VDEC_ReleaseFrame NG\n");
+		return -1;
+	}
+
+	priv.dec_pst_frame[ch] = NULL;
+	priv.dec_chn_running[ch] = 0;
+
+	return s32Ret;
+}
+
+int mmf_dec_h265_deinit(int ch)
+{
+	return mmf_vdec_deinit(ch);
+}
+
+int mmf_vdec_unused_channel(void) {
+	for (int i = 0; i < MMF_DEC_MAX_CHN; i++) {
+		if (!priv.dec_chn_is_init[i]) {
+			return i;
+		}
+	}
 	return -1;
+}
+
+int mmf_vdec_is_used(int ch)
+{
+	if (ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
+
+	return priv.dec_chn_running[ch];
+}
+
+int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
+{
+	if (ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
+	if (!priv.dec_chn_running[ch]) {
+		return -1;
+	}
+	if (!cfg) {
+		return -1;
+	}
+
+	memcpy(cfg, &priv.dec_chn_cfg[ch], sizeof(priv.dec_chn_cfg[ch]));
+
+	return 0;
+}
+
+static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
+{
+	if (ch >= MMF_DEC_MAX_CHN) {
+		printf("%s: channel %d is out of range.\n", __func__, ch);
+		return -1;
+	}
+	if (!chn_attr) {
+		printf("%s: cfg is not set.\n", __func__);
+		return -1;
+	}
+
+	if (chn_attr->enType == PT_H265)
+		return _mmf_dec_h265_init(ch, format_out, chn_attr);
+	if (chn_attr->enType == PT_H264)
+		return _mmf_dec_h264_init(ch, format_out, chn_attr);
+	if (chn_attr->enType == PT_JPEG)
+		return _mmf_dec_jpg_init(ch, format_out, chn_attr);
+
+	printf("%s: type %d not supported.\n", __func__, chn_attr->enType);
+	return -1;
+}
+
+int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg)
+{
+	VDEC_CHN_ATTR_S vdec_chn_attr;
+
+	if (!cfg) {
+		printf("%s: cfg is not set.\n", __func__);
+		return -1;
+	}
+
+	memset(&vdec_chn_attr, 0, sizeof(VDEC_CHN_ATTR_S));
+	vdec_chn_attr.enType = PT_JPEG;
+	if (cfg->type == 1)
+		vdec_chn_attr.enType = PT_H265;
+	if (cfg->type == 2)
+		vdec_chn_attr.enType = PT_H264;
+	vdec_chn_attr.enMode = VIDEO_MODE_FRAME;
+	vdec_chn_attr.u32PicWidth = cfg->w;
+	vdec_chn_attr.u32PicHeight = cfg->h;
+	vdec_chn_attr.u32FrameBufCnt = cfg->buffer_num;
+	vdec_chn_attr.u32FrameBufSize = VDEC_GetPicBufferSize(
+			vdec_chn_attr.enType, cfg->w, cfg->h,
+			(PIXEL_FORMAT_E)cfg->fmt, DATA_BITWIDTH_8, COMPRESS_MODE_NONE);
+
+	return _mmf_add_vdec_channel(ch, cfg->fmt, &vdec_chn_attr);
+}
+
+int mmf_del_vdec_channel(int ch)
+{
+	return mmf_vdec_deinit(ch);
+}
+
+int mmf_del_vdec_channel_all()
+{
+	for (int i = 0; i < MMF_DEC_MAX_CHN; i++)
+		mmf_del_vdec_channel(i);
+
+	return 0;
 }
 
 int mmf_invert_format_to_maix(int mmf_format) {
@@ -4301,5 +4975,39 @@ int mmf_add_vdec_channel0(uint32_t param, ...)
 	va_end(ap);
 
 	UNUSED(pool_num);
-	return mmf_add_vdec_channel(ch, format_out, (mmf_vdec_cfg_t *)cfg);
+	if (n_args > 3)
+		return _mmf_add_vdec_channel(ch, format_out, (VDEC_CHN_ATTR_S *)cfg);
+	return mmf_add_vdec_channel(ch, (mmf_vdec_cfg_t *)cfg);
+}
+
+int mmf_vdec_push0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 2))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	void *stStream = va_arg(ap, void*);
+	va_end(ap);
+
+	return _mmf_vdec_push(ch, (VDEC_STREAM_S *)stStream);
+}
+
+int mmf_vdec_pop0(uint32_t param, ...)
+{
+	int method = MMF_FUNC_GET_PARAM_METHOD(param);
+	int n_args = MMF_FUNC_GET_PARAM_NUM(param);
+	va_list ap;
+
+	if ((method != 0) || (n_args < 2))
+		return -1;
+	va_start(ap, param);
+	int ch = va_arg(ap, int);
+	void *frame = va_arg(ap, void*);
+	va_end(ap);
+
+	return _mmf_vdec_pop(ch, (VIDEO_FRAME_INFO_S *)frame);
 }

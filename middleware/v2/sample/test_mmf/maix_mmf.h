@@ -152,6 +152,17 @@ int mmf_venc_pop(int ch, mmf_stream_t *stream);
 int mmf_venc_free(int ch);
 int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg);
 
+// vdec
+int mmf_vdec_unused_channel(void);
+int mmf_vdec_is_used(int ch);
+int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg);
+int mmf_del_vdec_channel(int ch);
+int mmf_del_vdec_channel_all();
+int mmf_vdec_push(int ch, uint8_t *data, int size, uint8_t is_start, uint8_t is_end);
+int mmf_vdec_pop(int ch, void **data, int *len, int *width, int *height, int *format);
+int mmf_vdec_free(int ch);
+int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg);
+
 int mmf_init0(uint32_t param, ...);
 int mmf_deinit0(uint32_t param, ...);
 int mmf_vi_init0(uint32_t param, ...);
@@ -160,6 +171,8 @@ int mmf_add_vo_channel0(uint32_t param, ...);
 int mmf_add_region_channel0(uint32_t param, ...);
 int mmf_add_venc_channel0(uint32_t param, ...);
 int mmf_add_vdec_channel0(uint32_t param, ...);
+int mmf_vdec_push0(uint32_t param, ...);
+int mmf_vdec_pop0(uint32_t param, ...);
 
 static inline int mmf_init_v2(int reload_kmod) {
     return mmf_init0(MMF_FUNC_SET_PARAM(0, 1), reload_kmod);
@@ -193,4 +206,11 @@ static inline int mmf_add_vdec_channel_v2(int ch, int format_out, int pool_num, 
     return mmf_add_vdec_channel0(MMF_FUNC_SET_PARAM(0, 4), ch, format_out, pool_num, cfg);
 }
 
+static inline int mmf_vdec_push_v2(int ch, VDEC_STREAM_S *stStream) {
+    return mmf_vdec_push0(MMF_FUNC_SET_PARAM(0, 2), ch, stStream);
+}
+
+static inline int mmf_vdec_pop_v2(int ch, VIDEO_FRAME_INFO_S *frame) {
+    return mmf_vdec_pop0(MMF_FUNC_SET_PARAM(0, 2), ch, frame);
+}
 #endif // __SOPHGO_MIDDLEWARE_HPP__
