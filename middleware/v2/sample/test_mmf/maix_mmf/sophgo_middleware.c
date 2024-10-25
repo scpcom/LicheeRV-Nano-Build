@@ -3300,6 +3300,59 @@ static int mmf_venc_deinit(int ch)
 	return s32Ret;
 }
 
+int mmf_venc_push2(int ch, void *frame_info)
+{
+	int out_ch = ch;
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	VIDEO_FRAME_INFO_S *frame = (VIDEO_FRAME_INFO_S *)frame_info;
+	if (ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (priv.enc_chn_running[ch]) {
+		return s32Ret;
+	}
+	if (!frame) {
+		return -1;
+	}
+
+	int w = frame->stVFrame.u32Width;
+	int h = frame->stVFrame.u32Height;
+	int format = frame->stVFrame.enPixelFormat;
+	int quality = priv.enc_chn_cfg[ch].jpg_quality;
+
+	if (priv.enc_chn_cfg[ch].w != w || priv.enc_chn_cfg[ch].h != h || priv.enc_chn_cfg[ch].fmt != format || priv.enc_chn_cfg[ch].jpg_quality != quality) {
+		s32Ret = mmf_rst_venc_channel(ch, w, h, format, quality);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("mmf_rst_venc_channel failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		priv.enc_chn_cfg[ch].w = w;
+		priv.enc_chn_cfg[ch].h = h;
+		priv.enc_chn_cfg[ch].fmt = format;
+	}
+
+	switch (format) {
+		case PIXEL_FORMAT_RGB_888:
+		{
+			out_ch = 2;
+		}
+		break;
+		default:
+		break;
+	}
+
+	s32Ret = CVI_VENC_SendFrame(out_ch, frame, 1000);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("CVI_VENC_SendFrame failed with %d\n", s32Ret);
+		return s32Ret;
+	}
+
+	priv.enc_chn_running[ch] = 1;
+
+	return s32Ret;
+}
+
 static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
 	int out_ch = ch;
@@ -3487,6 +3540,11 @@ int mmf_venc_free(int ch)
 int mmf_enc_h265_deinit(int ch)
 {
 	return mmf_venc_deinit(ch);
+}
+
+int mmf_enc_h265_push2(int ch, void *frame_info)
+{
+	return mmf_venc_push2(ch, frame_info);
 }
 
 int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
