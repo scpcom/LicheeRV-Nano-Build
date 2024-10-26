@@ -1533,52 +1533,104 @@ int mmf_vi_aligned_width(int ch) {
 	return DEFAULT_ALIGN;
 }
 
-int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int *format) {
+int mmf_vi_frame_pop2(int ch, void **frame_info,  mmf_frame_info_t *frame_info_mmap) {
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d\n", ch);
+		return -1;
+	}
 	if (!priv.vi_chn_is_inited[ch]) {
-        printf("vi ch %d not open\n", ch);
-        return -1;
-    }
-    if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
-        printf("invalid ch %d\n", ch);
-        return -1;
-    }
-    if (data == NULL || len == NULL || width == NULL || height == NULL || format == NULL) {
-        printf("invalid param\n");
-        return -1;
-    }
+		printf("vi ch %d not open\n", ch);
+		return -1;
+	}
+	if (frame_info == NULL) {
+		printf("invalid param\n");
+		return -1;
+	}
 
 	int ret = -1;
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
 	if (CVI_VPSS_GetChnFrame(0, ch, frame, priv.vi_pop_timeout) == 0) {
-        int image_size = frame->stVFrame.u32Length[0]
-                        + frame->stVFrame.u32Length[1]
-				        + frame->stVFrame.u32Length[2];
-        CVI_VOID *vir_addr;
-        vir_addr = CVI_SYS_MmapCache(frame->stVFrame.u64PhyAddr[0], image_size);
-        CVI_SYS_IonInvalidateCache(frame->stVFrame.u64PhyAddr[0], vir_addr, image_size);
+		int image_size = frame->stVFrame.u32Length[0]
+			       + frame->stVFrame.u32Length[1]
+			       + frame->stVFrame.u32Length[2];
+		CVI_VOID *vir_addr;
+		vir_addr = CVI_SYS_MmapCache(frame->stVFrame.u64PhyAddr[0], image_size);
+		CVI_SYS_IonInvalidateCache(frame->stVFrame.u64PhyAddr[0], vir_addr, image_size);
 
-		frame->stVFrame.pu8VirAddr[0] = (CVI_U8 *)vir_addr;		// save virtual address for munmap
+		frame->stVFrame.pu8VirAddr[0] = (CVI_U8 *)vir_addr;	// save virtual address for munmap
 		// printf("width: %d, height: %d, total_buf_length: %d, phy:%#lx  vir:%p\n",
 		// 	   frame->stVFrame.u32Width,
 		// 	   frame->stVFrame.u32Height, image_size,
-        //        frame->stVFrame.u64PhyAddr[0], vir_addr);
+		// 	   frame->stVFrame.u64PhyAddr[0], vir_addr);
 
-		*data = vir_addr;
-        *len = image_size;
-        *width = frame->stVFrame.u32Width;
-        *height = frame->stVFrame.u32Height;
-        *format = frame->stVFrame.enPixelFormat;
+		*frame_info = frame;
+
+		if (!frame_info_mmap)
+			return 0;
+		frame_info_mmap->data = vir_addr;
+		frame_info_mmap->len = image_size;
+		frame_info_mmap->w = frame->stVFrame.u32Width;
+		frame_info_mmap->h = frame->stVFrame.u32Height;
+		frame_info_mmap->fmt = frame->stVFrame.enPixelFormat;
+
 		return 0;
-    }
+	}
+
 	return ret;
 }
 
+int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int *format) {
+	int ret;
+	void *frame;
+	mmf_frame_info_t frame_mmap;
+
+	if (data == NULL || len == NULL || width == NULL || height == NULL || format == NULL) {
+		printf("invalid param\n");
+		return -1;
+	}
+
+	ret = mmf_vi_frame_pop2(ch, &frame, &frame_mmap);
+	if (ret != 0)
+		return ret;
+
+	*data = frame_mmap.data;
+	*len = frame_mmap.len;
+	*width = frame_mmap.w;
+	*height = frame_mmap.h;
+	*format = frame_mmap.fmt;
+
+	return 0;
+}
+
+void mmf_vi_frame_free2(int ch, void **frame_info)
+{
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d\n", ch);
+		return;
+	}
+	if (!frame_info)
+		return;
+	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
+	if (*frame_info != frame)
+		return;
+
+	mmf_vi_frame_free(ch);
+}
+
 void mmf_vi_frame_free(int ch) {
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d\n", ch);
+		return;
+	}
+
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
 	int image_size = frame->stVFrame.u32Length[0]
                         + frame->stVFrame.u32Length[1]
 				        + frame->stVFrame.u32Length[2];
-	CVI_SYS_Munmap(frame->stVFrame.pu8VirAddr[0], image_size);
+	if (frame->stVFrame.pu8VirAddr[0]) {
+		CVI_SYS_Munmap(frame->stVFrame.pu8VirAddr[0], image_size);
+		frame->stVFrame.pu8VirAddr[0] = NULL;
+	}
 	if (CVI_VPSS_ReleaseChnFrame(0, ch, frame) != 0)
 			SAMPLE_PRT("CVI_VI_ReleaseChnFrame NG\n");
 }

@@ -36,6 +36,14 @@ typedef struct {
 } mmf_vdec_cfg_t;
 
 typedef struct {
+    void *data;
+    int len;
+    int w;
+	int h;
+	int fmt;
+} mmf_frame_info_t;
+
+typedef struct {
     int chn;
     int w;
     int h;
@@ -88,6 +96,8 @@ void mmf_vi_set_pop_timeout(int ms);
 // get vi frame
 int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int *format);
 void mmf_vi_frame_free(int ch);
+int mmf_vi_frame_pop2(int ch, void **frame_info,  mmf_frame_info_t *frame_info_mmap);
+void mmf_vi_frame_free2(int ch, void **frame_info);
 
 // manage vo channels
 int mmf_get_vo_unused_channel(int layer);
