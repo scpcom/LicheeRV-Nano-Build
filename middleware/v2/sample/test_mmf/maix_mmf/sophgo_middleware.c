@@ -166,6 +166,8 @@ typedef struct {
 static priv_t priv;
 static g_priv_t g_priv;
 
+static int mmf_region_frame_push2(int ch, void *frame_info);
+
 static int mmf_venc_deinit(int ch);
 static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
 static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
@@ -1993,6 +1995,109 @@ bool mmf_vo_channel_is_open(int layer, int ch) {
 	return false;
 }
 
+int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	VIDEO_FRAME_INFO_S *frame = (VIDEO_FRAME_INFO_S *)frame_info;
+
+	if (!frame) {
+		return -1;
+	}
+
+	int width = frame->stVFrame.u32Width;
+	int height = frame->stVFrame.u32Height;
+	int format = frame->stVFrame.enPixelFormat;
+
+	if (layer == MMF_VO_VIDEO_LAYER) {
+		if (fit != priv.vo_vpss_fit[ch]
+		|| width != (int)priv.vo_vpss_in_size[ch].u32Width
+		|| height != (int)priv.vo_vpss_in_size[ch].u32Height
+		|| format != (int)priv.vo_vpss_in_format[ch]) {
+			priv.vo_vpss_in_format[ch] = format;
+			priv.vo_vpss_in_size[ch].u32Width = width;
+			priv.vo_vpss_in_size[ch].u32Height = height;
+			priv.vo_vpss_fit[ch] = fit;
+			int width_out = priv.vo_vpss_out_size[ch].u32Width;
+			int height_out = priv.vo_vpss_out_size[ch].u32Height;
+			int fps_out = priv.vo_vpss_out_fps[ch];
+			int depth_out = priv.vo_vpss_out_depth[ch];
+			int mirror_out = !g_priv.vo_video_hmirror[ch];
+			int flip_out = !g_priv.vo_video_vflip[ch];
+			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
+			if (s32Ret != CVI_SUCCESS) {
+				SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				return -1;
+			}
+
+			s32Ret = _mmf_vpss_deinit_new(1);
+			if (s32Ret != CVI_SUCCESS) {
+				SAMPLE_PRT("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
+				return -1;
+			}
+
+			s32Ret = _mmf_vpss_init_new(1, width, height, (PIXEL_FORMAT_E)format);
+			if (s32Ret != CVI_SUCCESS) {
+				SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+				return -1;
+			}
+
+			s32Ret = _mmf_vpss_chn_deinit(1, ch);
+			if (s32Ret != CVI_SUCCESS) {
+				SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
+				return -1;
+			}
+
+			s32Ret = _mmf_vpss_chn_init(1, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
+			if (s32Ret != CVI_SUCCESS) {
+				SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
+				return -1;
+			}
+
+			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
+			if (s32Ret != CVI_SUCCESS) {
+				SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				return -1;
+			}
+		}
+
+		// if (priv.vo_video_cfg[ch].enPixFormat != (PIXEL_FORMAT_E)format) {
+		// 	printf("vo ch %d format not match. input:%d need:%d\n", ch, format, priv.vo_video_cfg[ch].enPixFormat);
+		// 	return CVI_FAILURE;
+		// }
+
+		// mmf_vo_frame_push
+		s32Ret = CVI_VPSS_SendFrame(1, frame, 1000);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VO_SendFrame failed >< with %#x\n", s32Ret);
+			return s32Ret;
+		}
+	} else if (layer == MMF_VO_OSD_LAYER) {
+		if (ch < 0 || ch >= MMF_VO_OSD_MAX_CHN) {
+			printf("invalid ch %d\n", ch);
+			return -1;
+		}
+
+		if (priv.vo_osd_chn_is_inited[ch] == false) {
+			printf("vo osd ch %d not open\n", ch);
+			return -1;
+		}
+
+		if (format != PIXEL_FORMAT_ARGB_8888) {
+			printf("only support ARGB format.\n");
+			return -1;
+		}
+
+		if (0 != mmf_region_frame_push2(ch, frame)) {
+			printf("mmf_region_flush failed!\r\n");
+			return -1;
+		}
+	} else {
+		printf("invalid layer %d\n", layer);
+		return -1;
+	}
+
+	return CVI_SUCCESS;
+}
+
 // flush vo
 int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit) {
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -2644,6 +2749,35 @@ int mmf_region_update_canvas(int ch)
 		return CVI_FAILURE;
 	}
 	return s32Ret;
+}
+
+static int mmf_region_frame_push2(int ch, void *frame_info)
+{
+	void *data;
+	int len = 0;
+	VIDEO_FRAME_INFO_S *frame = (VIDEO_FRAME_INFO_S *)frame_info;
+
+	if (!frame) {
+		return CVI_FAILURE;
+	}
+
+	data = frame->stVFrame.pu8VirAddr[0];
+
+	if (frame->stVFrame.pu8VirAddr[2] == (CVI_U8 *)frame->stVFrame.pu8VirAddr[1] + frame->stVFrame.u32Length[1]) {
+		len += frame->stVFrame.u32Length[2];
+	}
+	if (frame->stVFrame.pu8VirAddr[1] == (CVI_U8 *)frame->stVFrame.pu8VirAddr[0] + frame->stVFrame.u32Length[0]) {
+		len += frame->stVFrame.u32Length[1];
+	}
+	if (frame->stVFrame.pu8VirAddr[0]) {
+		len += frame->stVFrame.u32Length[0];
+	}
+
+	if (!data || !len) {
+		return CVI_FAILURE;
+	}
+
+	return mmf_region_frame_push(ch, data, len);
 }
 
 int mmf_region_frame_push(int ch, void *data, int len)

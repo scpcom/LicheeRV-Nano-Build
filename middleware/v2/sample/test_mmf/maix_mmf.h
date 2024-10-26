@@ -104,6 +104,7 @@ void mmf_get_vo_video_flip(int ch, bool *en);
 // flush vo
 int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit);
 int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format);
+int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info);
 
 // rgn
 int mmf_get_region_unused_channel(void);
