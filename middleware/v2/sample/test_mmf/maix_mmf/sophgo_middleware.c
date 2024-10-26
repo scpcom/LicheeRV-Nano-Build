@@ -319,27 +319,27 @@ void mmf_dump_frame(VIDEO_FRAME_INFO_S *frame) {
 static int _free_leak_memory_of_ion(void)
 {
 	#define MAX_LINE_LENGTH 256
-    FILE *fp;
-    char line[MAX_LINE_LENGTH];
-    char alloc_buf_size_str[20], phy_addr_str[20], buffer_name[20];
-    int alloc_buf_size;
+	FILE *fp;
+	char line[MAX_LINE_LENGTH];
+	char alloc_buf_size_str[20], phy_addr_str[20], buffer_name[20];
+	int alloc_buf_size;
 	uint64_t phy_addr;
 
-    fp = fopen("/sys/kernel/debug/ion/cvi_carveout_heap_dump/summary", "r");
-    if (fp == NULL) {
-        fprintf(stderr, "Error opening file\n");
-        return 1;
-    }
+	fp = fopen("/sys/kernel/debug/ion/cvi_carveout_heap_dump/summary", "r");
+	if (fp == NULL) {
+		fprintf(stderr, "Error opening file\n");
+		return 1;
+	}
 
-    while (fgets(line, MAX_LINE_LENGTH, fp) != NULL) {
-        if (sscanf(line, "%*d %s %s %*d %s", alloc_buf_size_str, phy_addr_str, buffer_name) == 3) {
+	while (fgets(line, MAX_LINE_LENGTH, fp) != NULL) {
+		if (sscanf(line, "%*d %s %s %*d %s", alloc_buf_size_str, phy_addr_str, buffer_name) == 3) {
 			if (strcmp(buffer_name, "VI_DMA_BUF")
 				&& strcmp(buffer_name, "ISP_SHARED_BUFFER_0"))
 				continue;
 			struct sys_ion_data2 ion_data;
 
-            alloc_buf_size = atoi(alloc_buf_size_str);
-            phy_addr = (unsigned int)strtol(phy_addr_str, NULL, 16);
+			alloc_buf_size = atoi(alloc_buf_size_str);
+			phy_addr = (unsigned int)strtol(phy_addr_str, NULL, 16);
 
 			memset(&ion_data, 0, sizeof(ion_data));
 			ion_data.cached = 1;
@@ -349,7 +349,7 @@ static int _free_leak_memory_of_ion(void)
 			memset(ion_data.name, 0, sizeof(ion_data.name));
 			strcpy((char *)ion_data.name, buffer_name);
 
-            printf("alloc_buf_size(%s): %d, phy_addr(%s): %#lx, buffer_name: %s\n",
+			printf("alloc_buf_size(%s): %d, phy_addr(%s): %#lx, buffer_name: %s\n",
 						alloc_buf_size_str, alloc_buf_size, phy_addr_str, phy_addr, buffer_name);
 
 			printf("ion_data.size:%d, ion_data.addr_p:%#x, ion_data.name:%s\r\n", ion_data.size, (int)ion_data.addr_p, ion_data.name);
@@ -360,10 +360,10 @@ static int _free_leak_memory_of_ion(void)
 				mmf_deinit();
 				return -1;
 			}
-        }
-    }
+		}
+	}
 
-    fclose(fp);
+	fclose(fp);
 
 	return 0;
 }
@@ -683,10 +683,10 @@ static void _mmf_sys_exit(void)
 
 static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 {
-	VB_CONFIG_S	   stVbConf;
-	CVI_U32        u32BlkSize, u32BlkRotSize;
+	VB_CONFIG_S stVbConf;
+	CVI_U32 u32BlkSize, u32BlkRotSize;
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	COMPRESS_MODE_E    enCompressMode   = COMPRESS_MODE_NONE;
+	COMPRESS_MODE_E enCompressMode   = COMPRESS_MODE_NONE;
 
 	memset(&stVbConf, 0, sizeof(VB_CONFIG_S));
 	memcpy(&stVbConf, &priv.vb_conf, sizeof(VB_CONFIG_S));
@@ -762,14 +762,14 @@ error:
 
 static CVI_S32 _mmf_vpss_deinit(VPSS_GRP VpssGrp, VPSS_CHN VpssChn)
 {
-	CVI_BOOL           abChnEnable[VPSS_MAX_PHY_CHN_NUM] = {0};
+	CVI_BOOL abChnEnable[VPSS_MAX_PHY_CHN_NUM] = {0};
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
-	/*start vpss*/
+	/*stop vpss*/
 	abChnEnable[VpssChn] = CVI_TRUE;
 	s32Ret = SAMPLE_COMM_VPSS_Stop(VpssGrp, abChnEnable);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("init vpss group failed. s32Ret: 0x%x !\n", s32Ret);
+		SAMPLE_PRT("stop vpss group failed. s32Ret: 0x%x !\n", s32Ret);
 	}
 
 	return s32Ret;
@@ -800,10 +800,10 @@ static CVI_S32 _mmf_vpss_deinit_new(VPSS_GRP VpssGrp)
 static CVI_S32 _mmf_vpss_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, SIZE_S stSizeIn, SIZE_S stSizeOut, PIXEL_FORMAT_E formatIn, PIXEL_FORMAT_E formatOut,
 int fps, int depth, bool mirror, bool flip, int fit)
 {
-	VPSS_GRP_ATTR_S    stVpssGrpAttr;
-	VPSS_CROP_INFO_S   stGrpCropInfo;
-	CVI_BOOL           abChnEnable[VPSS_MAX_PHY_CHN_NUM] = {0};
-	VPSS_CHN_ATTR_S    astVpssChnAttr[VPSS_MAX_PHY_CHN_NUM];
+	VPSS_GRP_ATTR_S stVpssGrpAttr;
+	VPSS_CROP_INFO_S stGrpCropInfo;
+	CVI_BOOL abChnEnable[VPSS_MAX_PHY_CHN_NUM] = {0};
+	VPSS_CHN_ATTR_S astVpssChnAttr[VPSS_MAX_PHY_CHN_NUM];
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
 	memset(&stVpssGrpAttr, 0, sizeof(VPSS_GRP_ATTR_S));
@@ -1026,22 +1026,22 @@ char* mmf_get_sensor_name(void)
 	switch (priv.sensor_type) {
 	    case GCORE_GC4653_MIPI_4M_30FPS_10BIT:
 	    case GCORE_GC4653_MIPI_720P_60FPS_10BIT:
-	        snprintf(name, sizeof(name), "gcore_gc4653");
-	        return name;
+		snprintf(name, sizeof(name), "gcore_gc4653");
+		return name;
 	    case SMS_SC035GS_MIPI_480P_120FPS_12BIT:
-	        snprintf(name, sizeof(name), "sms_sc035gs");
-	        return name;
+		snprintf(name, sizeof(name), "sms_sc035gs");
+		return name;
 	    case LONTIUM_LT6911_2M_60FPS_8BIT:
 		snprintf(name, sizeof(name), "lt6911");
-	        return name;
+		return name;
 	    case OV_OS04A10_MIPI_4M_1440P_30FPS_12BIT:
-	        snprintf(name, sizeof(name), "ov_os04a10");
-	        return name;
+		snprintf(name, sizeof(name), "ov_os04a10");
+		return name;
 	    case GCORE_OV2685_MIPI_1600x1200_30FPS_10BIT:
-	        snprintf(name, sizeof(name), "ov_ov2685");
-	        return name;
+		snprintf(name, sizeof(name), "ov_ov2685");
+		return name;
 	    default:
-	        break;
+		break;
 	}
 
 	snprintf(name, sizeof(name), "gcore_gc4653");
@@ -1081,11 +1081,11 @@ int mmf_vi_format_init(void)
 
 int mmf_init(void)
 {
-    if (priv.mmf_used_cnt) {
+	if (priv.mmf_used_cnt) {
 		priv.mmf_used_cnt ++;
-        printf("maix multi-media already inited(cnt:%d)\n", priv.mmf_used_cnt);
-        return 0;
-    }
+		printf("maix multi-media already inited(cnt:%d)\n", priv.mmf_used_cnt);
+		return 0;
+	}
 
 	priv_param_init();
 
@@ -1096,12 +1096,12 @@ int mmf_init(void)
 		printf("try release sys ok\n");
 	}
 
-    mmf_vi_format_init();
+	mmf_vi_format_init();
 
-    if (_mmf_init() != CVI_SUCCESS) {
-        printf("maix multi-media init failed\n");
-        return -1;
-    } else {
+	if (_mmf_init() != CVI_SUCCESS) {
+		printf("maix multi-media init failed\n");
+		return -1;
+	} else {
 		printf("maix multi-media init ok\n");
 	}
 
@@ -1123,18 +1123,19 @@ int mmf_init(void)
 	} else {
 		printf("try release vio ok\n");
 	}
-    return 0;
+
+	return 0;
 }
 
 bool mmf_is_init(void)
 {
-    return priv.mmf_used_cnt > 0 ? true : false;
+	return priv.mmf_used_cnt > 0 ? true : false;
 }
 
 int mmf_deinit(void) {
-    if (!priv.mmf_used_cnt) {
-        return 0;
-    }
+	if (!priv.mmf_used_cnt) {
+		return 0;
+	}
 
 	priv.mmf_used_cnt --;
 
@@ -1155,7 +1156,8 @@ int mmf_deinit(void) {
 		mmf_del_region_channel_all();
 		_mmf_deinit();
 	}
-    return 0;
+
+	return 0;
 }
 
 int mmf_try_deinit(bool force)
@@ -1172,7 +1174,7 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 {
 #if 1
 	VPSS_GRP_ATTR_S stGrpAttr;
-	VPSS_CROP_INFO_S   stChnCropInfo;
+	VPSS_CROP_INFO_S stChnCropInfo;
 	VPSS_CHN_ATTR_S chn_attr;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
@@ -1662,8 +1664,8 @@ void mmf_vi_frame_free(int ch) {
 
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
 	int image_size = frame->stVFrame.u32Length[0]
-                        + frame->stVFrame.u32Length[1]
-				        + frame->stVFrame.u32Length[2];
+		       + frame->stVFrame.u32Length[1]
+		       + frame->stVFrame.u32Length[2];
 	if (frame->stVFrame.pu8VirAddr[0]) {
 		CVI_SYS_Munmap(frame->stVFrame.pu8VirAddr[0], image_size);
 		frame->stVFrame.pu8VirAddr[0] = NULL;
@@ -2989,10 +2991,10 @@ int mmf_enc_jpg_init(int ch, int w, int h, int format, int quality)
 		.h = h,
 		.fmt = format,
 		.jpg_quality = (uint8_t)quality,
-		.gop = 0,	// unused
+		.gop = 0,  // unused
 		.intput_fps = 30,
 		.output_fps = 30,
-		.bitrate = 0,	// unused
+		.bitrate = 0,  // unused
 	};
 
 	return _mmf_enc_jpg_init(ch, &cfg);
@@ -3221,7 +3223,7 @@ int mmf_enc_h265_init(int ch, int w, int h)
 		.w = w,
 		.h = h,
 		.fmt = PIXEL_FORMAT_NV21,
-		.jpg_quality = 0,       // unused
+		.jpg_quality = 0,  // unused
 		.gop = 50,
 		.intput_fps = 30,
 		.output_fps = 30,
@@ -3412,7 +3414,7 @@ int mmf_enc_h264_init(int ch, int w, int h)
 		.w = w,
 		.h = h,
 		.fmt = PIXEL_FORMAT_NV21,
-		.jpg_quality = 0,       // unused
+		.jpg_quality = 0,  // unused
 		.gop = 50,
 		.intput_fps = 30,
 		.output_fps = 30,
@@ -4373,9 +4375,9 @@ int mmf_vdec_free(int ch)
 		printf("dec ch %d not open\n", ch);
 		return -1;
 	}
-        if (!priv.dec_chn_running[ch]) {
-                return s32Ret;
-        }
+	if (!priv.dec_chn_running[ch]) {
+		return s32Ret;
+	}
 
 	VIDEO_FRAME_INFO_S *frame = priv.dec_pst_frame[ch];
 	if (!frame)
