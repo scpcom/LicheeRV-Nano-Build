@@ -368,12 +368,78 @@ static int _free_leak_memory_of_ion(void)
 	return 0;
 }
 
+static CVI_S32 _mmf_init_frame(int id, SIZE_S stSize, PIXEL_FORMAT_E enPixelFormat,  VIDEO_FRAME_INFO_S *pstVideoFrame, VB_CAL_CONFIG_S *pstVbCfg)
+{
+	VIDEO_FRAME_S *pstVFrame;
+	VB_BLK blk;
+
+	if ((CVI_U32)id >= priv.vb_conf.u32MaxPoolCnt) {
+		SAMPLE_PRT("Invalid vb pool. id: %d\n", id);
+		return CVI_FAILURE;
+	}
+	if (!pstVideoFrame || !pstVbCfg) {
+		return CVI_FAILURE;
+	}
+
+	pstVFrame = &pstVideoFrame->stVFrame;
+
+	pstVFrame->enCompressMode = COMPRESS_MODE_NONE;
+	pstVFrame->enPixelFormat = enPixelFormat;
+	pstVFrame->enVideoFormat = VIDEO_FORMAT_LINEAR;
+	pstVFrame->enColorGamut = COLOR_GAMUT_BT709;
+	pstVFrame->u32Width = stSize.u32Width;
+	pstVFrame->u32Height = stSize.u32Height;
+	pstVFrame->u32TimeRef = 0;
+	pstVFrame->u64PTS = 0;
+	pstVFrame->enDynamicRange = DYNAMIC_RANGE_SDR8;
+
+	int retry_cnt = 0;
+_retry:
+	blk = CVI_VB_GetBlock(id, pstVbCfg->u32VBSize);
+	if (blk == VB_INVALID_HANDLE) {
+		if (retry_cnt ++ < 5) {
+			usleep(1000);
+			goto _retry;
+		}
+		SAMPLE_PRT("Can't acquire vb block. id: %d size:%d\n", id, pstVbCfg->u32VBSize);
+		return CVI_FAILURE;
+	}
+
+	pstVideoFrame->u32PoolId = CVI_VB_Handle2PoolId(blk);
+	pstVFrame->u64PhyAddr[0] = CVI_VB_Handle2PhysAddr(blk);
+	pstVFrame->u32Stride[0] = pstVbCfg->u32MainStride;
+	pstVFrame->u32Length[0] = pstVbCfg->u32MainYSize;
+	pstVFrame->pu8VirAddr[0] = (CVI_U8 *)CVI_SYS_MmapCache(pstVFrame->u64PhyAddr[0], pstVbCfg->u32VBSize);
+
+	if (pstVbCfg->plane_num == 2) {
+		pstVFrame->u64PhyAddr[1] = pstVFrame->u64PhyAddr[0] + ALIGN(pstVbCfg->u32MainYSize, pstVbCfg->u16AddrAlign);
+		pstVFrame->u32Stride[1] = pstVbCfg->u32CStride;
+		pstVFrame->u32Length[1] = pstVbCfg->u32MainCSize;
+		pstVFrame->pu8VirAddr[1] = (CVI_U8 *)pstVFrame->pu8VirAddr[0] + pstVFrame->u32Length[0];
+	}
+	if (pstVbCfg->plane_num == 3) {
+		pstVFrame->u64PhyAddr[2] = pstVFrame->u64PhyAddr[1] + ALIGN(pstVbCfg->u32MainCSize, pstVbCfg->u16AddrAlign);
+		pstVFrame->u32Stride[2] = pstVbCfg->u32CStride;
+		pstVFrame->u32Length[2] = pstVbCfg->u32MainCSize;
+		pstVFrame->pu8VirAddr[2] = (CVI_U8 *)pstVFrame->pu8VirAddr[1] + pstVFrame->u32Length[1];
+	}
+
+	CVI_U32 total_size = pstVFrame->u32Length[0] + pstVFrame->u32Length[1] + pstVFrame->u32Length[2];
+	if (total_size > pstVbCfg->u32VBSize)
+		SAMPLE_PRT("vb block. id: %d size:%d < %d\n", pstVideoFrame->u32PoolId, pstVbCfg->u32VBSize, total_size);
+
+	// CVI_VENC_TRACE("pool id: %u\n", pstVideoFrame->u32PoolId);
+	// CVI_VENC_TRACE("phy addr(%#llx, %#llx, %#llx), Size %x\n", (long long)pstVFrame->u64PhyAddr[0]
+	// 	, (long long)pstVFrame->u64PhyAddr[1], (long long)pstVFrame->u64PhyAddr[2], pstVbCfg->u32VBSize);
+	// CVI_VENC_TRACE("vir addr(%p, %p, %p), Size %x\n", pstVFrame->pu8VirAddr[0]
+	// 	, pstVFrame->pu8VirAddr[1], pstVFrame->pu8VirAddr[2], pstVbCfg->u32MainSize);
+
+	return CVI_SUCCESS;
+}
 
 static VIDEO_FRAME_INFO_S *_mmf_alloc_frame(int id, SIZE_S stSize, PIXEL_FORMAT_E enPixelFormat)
 {
 	VIDEO_FRAME_INFO_S *pstVideoFrame;
-	VIDEO_FRAME_S *pstVFrame;
-	VB_BLK blk;
 	VB_CAL_CONFIG_S stVbCfg;
 
 	pstVideoFrame = (VIDEO_FRAME_INFO_S *)calloc(sizeof(*pstVideoFrame), 1);
@@ -390,58 +456,19 @@ static VIDEO_FRAME_INFO_S *_mmf_alloc_frame(int id, SIZE_S stSize, PIXEL_FORMAT_
 				COMPRESS_MODE_NONE,
 				&stVbCfg);
 
-	pstVFrame = &pstVideoFrame->stVFrame;
-
-	pstVFrame->enCompressMode = COMPRESS_MODE_NONE;
-	pstVFrame->enPixelFormat = enPixelFormat;
-	pstVFrame->enVideoFormat = VIDEO_FORMAT_LINEAR;
-	pstVFrame->enColorGamut = COLOR_GAMUT_BT709;
-	pstVFrame->u32Width = stSize.u32Width;
-	pstVFrame->u32Height = stSize.u32Height;
-	pstVFrame->u32TimeRef = 0;
-	pstVFrame->u64PTS = 0;
-	pstVFrame->enDynamicRange = DYNAMIC_RANGE_SDR8;
-
-	blk = CVI_VB_GetBlock(id, stVbCfg.u32VBSize);
-	if (blk == VB_INVALID_HANDLE) {
-		SAMPLE_PRT("Can't acquire vb block. id: %d size:%d\n", id, stVbCfg.u32VBSize);
+	if (_mmf_init_frame(id, stSize, enPixelFormat, pstVideoFrame, &stVbCfg) != CVI_SUCCESS)
+	{
 		free(pstVideoFrame);
 		return NULL;
 	}
 
-	pstVideoFrame->u32PoolId = CVI_VB_Handle2PoolId(blk);
-	pstVFrame->u64PhyAddr[0] = CVI_VB_Handle2PhysAddr(blk);
-	pstVFrame->u32Stride[0] = stVbCfg.u32MainStride;
-	pstVFrame->u32Length[0] = stVbCfg.u32MainYSize;
-	pstVFrame->pu8VirAddr[0] = (CVI_U8 *)CVI_SYS_MmapCache(pstVFrame->u64PhyAddr[0], stVbCfg.u32VBSize);
-
-	if (stVbCfg.plane_num > 1) {
-		pstVFrame->u64PhyAddr[1] = ALIGN(pstVFrame->u64PhyAddr[0] + stVbCfg.u32MainYSize, stVbCfg.u16AddrAlign);
-		pstVFrame->u32Stride[1] = stVbCfg.u32CStride;
-		pstVFrame->u32Length[1] = stVbCfg.u32MainCSize;
-		pstVFrame->pu8VirAddr[1] = (CVI_U8 *)pstVFrame->pu8VirAddr[0] + pstVFrame->u32Length[0];
-	}
-
-	if (stVbCfg.plane_num > 2) {
-		pstVFrame->u64PhyAddr[2] = ALIGN(pstVFrame->u64PhyAddr[1] + stVbCfg.u32MainCSize, stVbCfg.u16AddrAlign);
-		pstVFrame->u32Stride[2] = stVbCfg.u32CStride;
-		pstVFrame->u32Length[2] = stVbCfg.u32MainCSize;
-		pstVFrame->pu8VirAddr[2] = (CVI_U8 *)pstVFrame->pu8VirAddr[1] + pstVFrame->u32Length[1];
-	}
-
-	// CVI_VENC_TRACE("phy addr(%#llx, %#llx, %#llx), Size %x\n", (long long)pstVFrame->u64PhyAddr[0]
-	// 	, (long long)pstVFrame->u64PhyAddr[1], (long long)pstVFrame->u64PhyAddr[2], stVbCfg.u32VBSize);
-	// CVI_VENC_TRACE("vir addr(%p, %p, %p), Size %x\n", pstVFrame->pu8VirAddr[0]
-	// 	, pstVFrame->pu8VirAddr[1], pstVFrame->pu8VirAddr[2], stVbCfg.u32MainSize);
-
 	return pstVideoFrame;
 }
 
-static CVI_S32 _mmf_free_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
+static CVI_S32 _mmf_deinit_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
 {
 	VIDEO_FRAME_S *pstVFrame;
 	VB_BLK blk;
-	CVI_U32 u32VBSize = 0;
 
 	if (!pstVideoFrame)
 		return CVI_FAILURE;
@@ -450,32 +477,42 @@ static CVI_S32 _mmf_free_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
 
 	if (pstVFrame->pu8VirAddr[2] == (CVI_U8 *)pstVFrame->pu8VirAddr[1] + pstVFrame->u32Length[1])
 	{
-		u32VBSize += pstVFrame->u32Length[2];
+		pstVFrame->u32Length[1] += pstVFrame->u32Length[2];
 		pstVFrame->u32Length[2] = 0;
 		pstVFrame->pu8VirAddr[2] = NULL;
+		pstVFrame->u64PhyAddr[2] = 0;
 	}
 	if (pstVFrame->pu8VirAddr[1] == (CVI_U8 *)pstVFrame->pu8VirAddr[0] + pstVFrame->u32Length[0])
 	{
-		u32VBSize += pstVFrame->u32Length[1];
+		pstVFrame->u32Length[0] += pstVFrame->u32Length[1];
 		pstVFrame->u32Length[1] = 0;
 		pstVFrame->pu8VirAddr[1] = NULL;
-	}
-	if (pstVFrame->pu8VirAddr[0])
-	{
-		u32VBSize += pstVFrame->u32Length[0];
-		pstVFrame->u32Length[0] = u32VBSize;
+		pstVFrame->u64PhyAddr[1] = 0;
 	}
 
-	if (pstVFrame->pu8VirAddr[0])
-		CVI_SYS_Munmap((CVI_VOID *)pstVFrame->pu8VirAddr[0], pstVFrame->u32Length[0]);
-	if (pstVFrame->pu8VirAddr[1])
-		CVI_SYS_Munmap((CVI_VOID *)pstVFrame->pu8VirAddr[1], pstVFrame->u32Length[1]);
-	if (pstVFrame->pu8VirAddr[2])
-		CVI_SYS_Munmap((CVI_VOID *)pstVFrame->pu8VirAddr[2], pstVFrame->u32Length[2]);
+	for (int b = 0; b < 3; b++) {
+		if (pstVFrame->pu8VirAddr[b]) {
+			CVI_SYS_Munmap((CVI_VOID *)pstVFrame->pu8VirAddr[b], pstVFrame->u32Length[b]);
+			pstVFrame->u32Length[b] = 0;
+			pstVFrame->pu8VirAddr[b] = NULL;
+		}
 
-	blk = CVI_VB_PhysAddr2Handle(pstVFrame->u64PhyAddr[0]);
-	if (blk != VB_INVALID_HANDLE) {
-		CVI_VB_ReleaseBlock(blk);
+		if (pstVFrame->u64PhyAddr[b]) {
+			blk = CVI_VB_PhysAddr2Handle(pstVFrame->u64PhyAddr[b]);
+			if (blk != VB_INVALID_HANDLE) {
+				CVI_VB_ReleaseBlock(blk);
+			}
+			pstVFrame->u64PhyAddr[b] = 0;
+		}
+	}
+
+	return CVI_SUCCESS;
+}
+
+static CVI_S32 _mmf_free_frame(VIDEO_FRAME_INFO_S *pstVideoFrame)
+{
+	if (_mmf_deinit_frame(pstVideoFrame) != CVI_SUCCESS) {
+		return CVI_FAILURE;
 	}
 
 	free(pstVideoFrame);
@@ -2320,7 +2357,6 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 		}
 #else
 		VIDEO_FRAME_INFO_S stVideoFrame;
-		VB_BLK blk;
 		VB_CAL_CONFIG_S stVbCalConfig;
 		UNUSED(len);
 		COMMON_GetPicBufferConfig(width, height, (PIXEL_FORMAT_E)format, DATA_BITWIDTH_8
@@ -2332,61 +2368,9 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 		// }
 
 		memset(&stVideoFrame, 0, sizeof(stVideoFrame));
-		stVideoFrame.stVFrame.enCompressMode = COMPRESS_MODE_NONE;
-		stVideoFrame.stVFrame.enPixelFormat = (PIXEL_FORMAT_E)format;
-		stVideoFrame.stVFrame.enVideoFormat = VIDEO_FORMAT_LINEAR;
-		stVideoFrame.stVFrame.enColorGamut = COLOR_GAMUT_BT709;
-		stVideoFrame.stVFrame.u32Width = width;
-		stVideoFrame.stVFrame.u32Height = height;
-		stVideoFrame.stVFrame.u32Stride[0] = stVbCalConfig.u32MainStride;
-		if (stVbCalConfig.plane_num == 2) {
-			stVideoFrame.stVFrame.u32Stride[1] = stVbCalConfig.u32CStride;
-		}
-		if (stVbCalConfig.plane_num == 3) {
-			stVideoFrame.stVFrame.u32Stride[2] = stVbCalConfig.u32CStride;
-		}
-		stVideoFrame.stVFrame.u32TimeRef = 0;
-		stVideoFrame.stVFrame.u64PTS = 0;
-		stVideoFrame.stVFrame.enDynamicRange = DYNAMIC_RANGE_SDR8;
 
-		int retry_cnt = 0;
-	_retry:
-		blk = CVI_VB_GetBlock(MMF_VB_USER_ID, stVbCalConfig.u32VBSize);
-		if (blk == VB_INVALID_HANDLE) {
-			if (retry_cnt ++ < 5) {
-				usleep(1000);
-				goto _retry;
-			}
-			SAMPLE_PRT("SAMPLE_COMM_VPSS_SendFrame: Can't acquire vb block\n");
+		if (_mmf_init_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format, &stVideoFrame, &stVbCalConfig) != CVI_SUCCESS) {
 			return CVI_FAILURE;
-		}
-		// printf("u32PoolId:%d, u32Length:%d, u64PhyAddr:%#lx\r\n", CVI_VB_Handle2PoolId(blk), stVbCalConfig.u32VBSize, CVI_VB_Handle2PhysAddr(blk));
-
-		stVideoFrame.u32PoolId = CVI_VB_Handle2PoolId(blk);
-		stVideoFrame.stVFrame.u32Length[0] = stVbCalConfig.u32MainYSize;
-		stVideoFrame.stVFrame.u64PhyAddr[0] = CVI_VB_Handle2PhysAddr(blk);
-
-		if (stVbCalConfig.plane_num == 2) {
-			stVideoFrame.stVFrame.u32Length[1] = stVbCalConfig.u32MainCSize;
-			stVideoFrame.stVFrame.u64PhyAddr[1] = stVideoFrame.stVFrame.u64PhyAddr[0]
-				+ ALIGN(stVbCalConfig.u32MainYSize, stVbCalConfig.u16AddrAlign);
-		}
-		if (stVbCalConfig.plane_num == 3) {
-			stVideoFrame.stVFrame.u32Length[2] = stVbCalConfig.u32MainCSize;
-			stVideoFrame.stVFrame.u64PhyAddr[2] = stVideoFrame.stVFrame.u64PhyAddr[1]
-				+ ALIGN(stVbCalConfig.u32MainCSize, stVbCalConfig.u16AddrAlign);
-		}
-
-		CVI_U32 total_size = stVideoFrame.stVFrame.u32Length[0] + stVideoFrame.stVFrame.u32Length[1] + stVideoFrame.stVFrame.u32Length[2];
-		stVideoFrame.stVFrame.pu8VirAddr[0]
-				= (CVI_U8*)CVI_SYS_MmapCache(stVideoFrame.stVFrame.u64PhyAddr[0], total_size);
-
-		if (stVbCalConfig.plane_num == 2) {
-			stVideoFrame.stVFrame.pu8VirAddr[1] = stVideoFrame.stVFrame.pu8VirAddr[0] + stVideoFrame.stVFrame.u32Length[0];
-		}
-
-		if (stVbCalConfig.plane_num == 3) {
-			stVideoFrame.stVFrame.pu8VirAddr[2] = stVideoFrame.stVFrame.pu8VirAddr[1] + stVideoFrame.stVFrame.u32Length[1];
 		}
 
 		switch (format) {
@@ -2418,7 +2402,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 		break;
 		default:
 			printf("format not support\n");
-			CVI_VB_ReleaseBlock(blk);
+			_mmf_deinit_frame(&stVideoFrame);
 			return CVI_FAILURE;
 		}
 
@@ -2438,17 +2422,11 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 		s32Ret = CVI_VPSS_SendFrame(1, &stVideoFrame, 1000);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VO_SendFrame failed >< with %#x\n", s32Ret);
-			CVI_VB_ReleaseBlock(blk);
+			_mmf_deinit_frame(&stVideoFrame);
 			return s32Ret;
 		}
 
-		CVI_VB_ReleaseBlock(blk);
-
-		for (int i = 0; i < stVbCalConfig.plane_num; ++i) {
-			if (stVideoFrame.stVFrame.u32Length[i] == 0)
-				continue;
-			CVI_SYS_Munmap(stVideoFrame.stVFrame.pu8VirAddr[i], stVideoFrame.stVFrame.u32Length[i]);
-		}
+		_mmf_deinit_frame(&stVideoFrame);
 #endif
 	} else if (layer == MMF_VO_OSD_LAYER) {
 		if (ch < 0 || ch >= MMF_VO_OSD_MAX_CHN) {
