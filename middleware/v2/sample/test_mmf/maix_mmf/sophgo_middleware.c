@@ -2859,8 +2859,12 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 {
 	VPSS_GRP out_grp = 0;
 
-	if (priv.enc_chn_is_init[ch])
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (priv.enc_chn_is_init[ch]) {
 		return 0;
+	}
 
 	if ((int8_t)cfg->jpg_quality <= 50) {
 		printf("quality range is (50, 100]\n");
@@ -3008,7 +3012,7 @@ int mmf_enc_jpg_deinit(int ch)
 int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int format, int quality)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_is_init[ch]) {
@@ -3024,7 +3028,7 @@ int mmf_enc_jpg_push_with_quality(int ch, uint8_t *data, int w, int h, int forma
 
 int mmf_enc_jpg_push(int ch, uint8_t *data, int w, int h, int format)
 {
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_cfg[ch].jpg_quality) {
@@ -3058,8 +3062,12 @@ int mmf_enc_jpg_free(int ch)
 
 static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 {
-	if (priv.enc_chn_is_init[ch])
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (priv.enc_chn_is_init[ch]) {
 		return 0;
+	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
@@ -3235,8 +3243,12 @@ int mmf_enc_h265_init(int ch, int w, int h)
 
 static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 {
-	if (priv.enc_chn_is_init[ch])
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
+		return -1;
+	}
+	if (priv.enc_chn_is_init[ch]) {
 		return 0;
+	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
@@ -3429,7 +3441,7 @@ static int mmf_venc_deinit(int ch)
 {
 	VPSS_GRP out_grp = 0;
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_is_init[ch]) {
@@ -3495,7 +3507,7 @@ int mmf_venc_push2(int ch, void *frame_info)
 	int out_ch = ch;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	VIDEO_FRAME_INFO_S *frame = (VIDEO_FRAME_INFO_S *)frame_info;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (priv.enc_chn_running[ch]) {
@@ -3547,7 +3559,7 @@ static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int q
 {
 	int out_ch = ch;
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (priv.enc_chn_running[ch]) {
@@ -3618,7 +3630,7 @@ static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int q
 
 int mmf_venc_push(int ch, uint8_t *data, int w, int h, int format)
 {
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 
@@ -3628,7 +3640,7 @@ int mmf_venc_push(int ch, uint8_t *data, int w, int h, int format)
 int mmf_venc_pop(int ch, mmf_stream_t *stream)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_running[ch]) {
@@ -3705,7 +3717,7 @@ int mmf_venc_pop(int ch, mmf_stream_t *stream)
 int mmf_venc_free(int ch)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_running[ch]) {
@@ -3740,7 +3752,7 @@ int mmf_enc_h265_push2(int ch, void *frame_info)
 int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_is_init[ch]) {
@@ -3775,7 +3787,7 @@ int mmf_venc_unused_channel(void) {
 
 int mmf_venc_is_used(int ch)
 {
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 
@@ -3784,7 +3796,7 @@ int mmf_venc_is_used(int ch)
 
 int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg)
 {
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.enc_chn_running[ch]) {
@@ -3801,7 +3813,7 @@ int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg)
 
 int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 {
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		printf("%s: channel %d is out of range.\n", __func__, ch);
 		return -1;
 	}
@@ -3837,7 +3849,7 @@ static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality)
 {
 	mmf_venc_cfg_t cfg;
 
-	if (ch >= MMF_ENC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		printf("%s: channel %d is out of range.\n", __func__, ch);
 		return -1;
 	}
@@ -3860,6 +3872,9 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 {
 	int format_in = PIXEL_FORMAT_YUV_PLANAR_444; //PIXEL_FORMAT_YUV_PLANAR_420;
 
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
 	if (priv.dec_chn_is_init[ch])
 		return 0;
 
@@ -3978,6 +3993,7 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	return s32Ret;
 }
 
+#if 0
 int mmf_dec_jpg_init(int ch, int w, int h, int format)
 {
 	mmf_vdec_cfg_t cfg = {
@@ -3995,9 +4011,13 @@ int mmf_dec_jpg_deinit(int ch)
 {
 	return  mmf_vdec_deinit(ch);
 }
+#endif
 
 static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
 	if (priv.dec_chn_is_init[ch])
 		return 0;
 
@@ -4044,6 +4064,7 @@ static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	return s32Ret;
 }
 
+#if 0
 int mmf_dec_h265_init(int ch, int w, int h)
 {
 	mmf_vdec_cfg_t cfg = {
@@ -4056,9 +4077,13 @@ int mmf_dec_h265_init(int ch, int w, int h)
 
 	return mmf_add_vdec_channel(ch, &cfg);
 }
+#endif
 
 static int _mmf_dec_h264_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		return -1;
+	}
 	if (priv.dec_chn_is_init[ch])
 		return 0;
 
@@ -4112,6 +4137,7 @@ static int _mmf_dec_h264_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	return s32Ret;
 }
 
+#if 0
 int mmf_dec_h264_init(int ch, int w, int h)
 {
 	mmf_vdec_cfg_t cfg = {
@@ -4124,11 +4150,12 @@ int mmf_dec_h264_init(int ch, int w, int h)
 
 	return mmf_add_vdec_channel(ch, &cfg);
 }
+#endif
 
 static int mmf_vdec_deinit(int ch)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_DEC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.dec_chn_is_init[ch]) {
@@ -4187,7 +4214,7 @@ static int _mmf_vdec_push(int ch, VDEC_STREAM_S *stStream)
 {
 	int out_ch = ch;
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	if (ch >= MMF_DEC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		return -1;
 	}
 	if (priv.dec_chn_running[ch]) {
@@ -4211,7 +4238,7 @@ int mmf_vdec_push(int ch, uint8_t *data, int size, uint8_t is_start, uint8_t is_
 	VDEC_STREAM_S *stStream;
 	UNUSED(is_start);
 
-	if (ch >= MMF_DEC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		return -1;
 	}
 	if (!data && (size != 0)) {
@@ -4415,10 +4442,12 @@ int mmf_vdec_free(int ch)
 	return s32Ret;
 }
 
+#if 0
 int mmf_dec_h265_deinit(int ch)
 {
 	return mmf_vdec_deinit(ch);
 }
+#endif
 
 int mmf_vdec_unused_channel(void) {
 	for (int i = 0; i < MMF_DEC_MAX_CHN; i++) {
@@ -4431,7 +4460,7 @@ int mmf_vdec_unused_channel(void) {
 
 int mmf_vdec_is_used(int ch)
 {
-	if (ch >= MMF_DEC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		return -1;
 	}
 
@@ -4440,7 +4469,7 @@ int mmf_vdec_is_used(int ch)
 
 int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
 {
-	if (ch >= MMF_DEC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		return -1;
 	}
 	if (!priv.dec_chn_running[ch]) {
@@ -4457,7 +4486,7 @@ int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
 
 static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 {
-	if (ch >= MMF_DEC_MAX_CHN) {
+	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		printf("%s: channel %d is out of range.\n", __func__, ch);
 		return -1;
 	}
@@ -4710,8 +4739,8 @@ int mmf_get_sensor_id(void)
 
 void mmf_get_vi_hmirror(int ch, bool *en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
@@ -4723,8 +4752,8 @@ void mmf_get_vi_hmirror(int ch, bool *en)
 
 void mmf_set_vi_hmirror(int ch, bool en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
@@ -4733,8 +4762,8 @@ void mmf_set_vi_hmirror(int ch, bool en)
 
 void mmf_get_vi_vflip(int ch, bool *en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
@@ -4746,8 +4775,8 @@ void mmf_get_vi_vflip(int ch, bool *en)
 
 void mmf_set_vi_vflip(int ch, bool en)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
@@ -4756,8 +4785,8 @@ void mmf_set_vi_vflip(int ch, bool en)
 
 void mmf_get_vo_video_hmirror(int ch, bool *en)
 {
-	if (ch > MMF_VO_VIDEO_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VO_VIDEO_MAX_CHN);
 		return;
 	}
 
@@ -4769,8 +4798,8 @@ void mmf_get_vo_video_hmirror(int ch, bool *en)
 
 void mmf_set_vo_video_hmirror(int ch, bool en)
 {
-	if (ch > MMF_VO_VIDEO_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VO_VIDEO_MAX_CHN);
 		return;
 	}
 
@@ -4779,8 +4808,8 @@ void mmf_set_vo_video_hmirror(int ch, bool en)
 
 void mmf_get_vo_video_flip(int ch, bool *en)
 {
-	if (ch > MMF_VO_VIDEO_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VO_VIDEO_MAX_CHN);
 		return;
 	}
 
@@ -4792,8 +4821,8 @@ void mmf_get_vo_video_flip(int ch, bool *en)
 
 void mmf_set_vo_video_flip(int ch, bool en)
 {
-	if (ch > MMF_VO_VIDEO_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VO_VIDEO_MAX_CHN);
 		return;
 	}
 
@@ -4802,8 +4831,8 @@ void mmf_set_vo_video_flip(int ch, bool en)
 
 int mmf_get_constrast(int ch, uint32_t *value)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return -1;
 	}
 
@@ -4822,8 +4851,8 @@ int mmf_get_constrast(int ch, uint32_t *value)
 
 void mmf_set_constrast(int ch, uint32_t val)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
@@ -4841,8 +4870,8 @@ void mmf_set_constrast(int ch, uint32_t val)
 
 int mmf_get_saturation(int ch, uint32_t *value)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return -1;
 	}
 
@@ -4861,8 +4890,8 @@ int mmf_get_saturation(int ch, uint32_t *value)
 
 void mmf_set_saturation(int ch, uint32_t val)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
@@ -4881,8 +4910,8 @@ void mmf_set_saturation(int ch, uint32_t val)
 
 int mmf_get_luma(int ch, uint32_t *value)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return -1;
 	}
 
@@ -4900,8 +4929,8 @@ int mmf_get_luma(int ch, uint32_t *value)
 
 void mmf_set_luma(int ch, uint32_t val)
 {
-	if (ch > MMF_VI_MAX_CHN) {
-		printf("invalid ch, must be [0, %d)\r\n", ch);
+	if (ch < 0 || ch >= MMF_VI_MAX_CHN) {
+		printf("invalid ch %d, must be >= 0 < %d\r\n", ch, MMF_VI_MAX_CHN);
 		return;
 	}
 
