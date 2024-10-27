@@ -3804,12 +3804,15 @@ int mmf_venc_is_used(int ch)
 int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg)
 {
 	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
+		printf("%s: channel %d is out of range.\n", __func__, ch);
 		return -1;
 	}
-	if (!priv.enc_chn_running[ch]) {
+	if (!priv.enc_chn_is_init[ch]) {
+		printf("%s: channel %d is not initialized.\n", __func__, ch);
 		return -1;
 	}
 	if (!cfg) {
+		printf("%s: cfg is not set.\n", __func__);
 		return -1;
 	}
 
@@ -4477,12 +4480,15 @@ int mmf_vdec_is_used(int ch)
 int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
 {
 	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
+		printf("%s: channel %d is out of range.\n", __func__, ch);
 		return -1;
 	}
-	if (!priv.dec_chn_running[ch]) {
+	if (!priv.dec_chn_is_init[ch]) {
+		printf("%s: channel %d is not initialized.\n", __func__, ch);
 		return -1;
 	}
 	if (!cfg) {
+		printf("%s: cfg is not set.\n", __func__);
 		return -1;
 	}
 
