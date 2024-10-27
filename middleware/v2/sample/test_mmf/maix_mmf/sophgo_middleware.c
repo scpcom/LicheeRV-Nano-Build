@@ -3771,6 +3771,13 @@ int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream)
 	return mmf_venc_pop(ch, (mmf_stream_t *)stream);
 }
 
+#ifdef __cplusplus
+int mmf_enc_h265_pop(int ch, mmf_stream_t *stream)
+{
+	return mmf_venc_pop(ch, stream);
+}
+#endif
+
 int mmf_enc_h265_free(int ch)
 {
 	return mmf_venc_free(ch);

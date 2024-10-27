@@ -13,7 +13,12 @@ typedef struct {
     int count;
 } mmf_stream_t;
 
-#define mmf_h265_stream_t mmf_stream_t
+// old struct, must keep same as mmf_stream_t
+typedef struct {
+    uint8_t *data[8];
+    int data_size[8];
+    int count;
+} mmf_h265_stream_t;
 
 typedef struct {
     uint8_t type;           // 0, jpg; 1, h265; 2, h264
@@ -140,6 +145,9 @@ int mmf_enc_h265_deinit(int ch);
 int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format);
 int mmf_enc_h265_push2(int ch, void *frame_info);
 int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream);
+#ifdef __cplusplus
+int mmf_enc_h265_pop(int ch, mmf_stream_t *stream);
+#endif
 int mmf_enc_h265_free(int ch);
 
 // invert format
