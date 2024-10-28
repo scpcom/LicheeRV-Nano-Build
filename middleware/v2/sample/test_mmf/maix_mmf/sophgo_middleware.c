@@ -374,7 +374,7 @@ static CVI_S32 _mmf_init_frame(int id, SIZE_S stSize, PIXEL_FORMAT_E enPixelForm
 	VB_BLK blk;
 
 	if ((CVI_U32)id >= priv.vb_conf.u32MaxPoolCnt) {
-		SAMPLE_PRT("Invalid vb pool. id: %d\n", id);
+		printf("Invalid vb pool. id: %d\n", id);
 		return CVI_FAILURE;
 	}
 	if (!pstVideoFrame || !pstVbCfg) {
@@ -401,7 +401,7 @@ _retry:
 			usleep(1000);
 			goto _retry;
 		}
-		SAMPLE_PRT("Can't acquire vb block. id: %d size:%d\n", id, pstVbCfg->u32VBSize);
+		printf("Can't acquire vb block. id: %d size:%d\n", id, pstVbCfg->u32VBSize);
 		return CVI_FAILURE;
 	}
 
@@ -426,7 +426,7 @@ _retry:
 
 	CVI_U32 total_size = pstVFrame->u32Length[0] + pstVFrame->u32Length[1] + pstVFrame->u32Length[2];
 	if (total_size > pstVbCfg->u32VBSize)
-		SAMPLE_PRT("vb block. id: %d size:%d < %d\n", pstVideoFrame->u32PoolId, pstVbCfg->u32VBSize, total_size);
+		printf("vb block. id: %d size:%d < %d\n", pstVideoFrame->u32PoolId, pstVbCfg->u32VBSize, total_size);
 
 	// CVI_VENC_TRACE("pool id: %u\n", pstVideoFrame->u32PoolId);
 	// CVI_VENC_TRACE("phy addr(%#llx, %#llx, %#llx), Size %x\n", (long long)pstVFrame->u64PhyAddr[0]
@@ -444,7 +444,7 @@ static VIDEO_FRAME_INFO_S *_mmf_alloc_frame(int id, SIZE_S stSize, PIXEL_FORMAT_
 
 	pstVideoFrame = (VIDEO_FRAME_INFO_S *)calloc(sizeof(*pstVideoFrame), 1);
 	if (pstVideoFrame == NULL) {
-		SAMPLE_PRT("Failed to allocate VIDEO_FRAME_INFO_S\n");
+		printf("Failed to allocate VIDEO_FRAME_INFO_S\n");
 		return NULL;
 	}
 
@@ -615,7 +615,7 @@ static int _try_release_sys(void)
 	SAMPLE_INI_CFG_S	   	stIniCfg;
 	SAMPLE_VI_CONFIG_S 		stViConfig;
 	if (SAMPLE_COMM_VI_ParseIni(&stIniCfg)) {
-		SAMPLE_PRT("Parse complete\n");
+		printf("Parse complete\n");
 		return s32Ret;
 	}
 
@@ -623,25 +623,25 @@ static int _try_release_sys(void)
 
 	s32Ret = CVI_VI_SetDevNum(stIniCfg.devNum);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("VI_SetDevNum failed with %#x\n", s32Ret);
+		printf("VI_SetDevNum failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
 	s32Ret = SAMPLE_COMM_VI_IniToViCfg(&stIniCfg, &stViConfig);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_COMM_VI_IniToViCfg failed with %#x\n", s32Ret);
+		printf("SAMPLE_COMM_VI_IniToViCfg failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
 	s32Ret = SAMPLE_COMM_VI_DestroyIsp(&stViConfig);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_COMM_VI_DestroyIsp failed with %#x\n", s32Ret);
+		printf("SAMPLE_COMM_VI_DestroyIsp failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
 	s32Ret = SAMPLE_COMM_VI_DestroyVi(&stViConfig);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_COMM_VI_DestroyVi failed with %#x\n", s32Ret);
+		printf("SAMPLE_COMM_VI_DestroyVi failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
@@ -654,13 +654,13 @@ int _try_release_vio_all(void)
 	CVI_S32 s32Ret = CVI_FAILURE;
 	s32Ret = mmf_del_vi_channel_all();
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("mmf_del_vi_channel_all failed with %#x\n", s32Ret);
+		printf("mmf_del_vi_channel_all failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
 	s32Ret = mmf_del_vo_channel_all(0);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("mmf_del_vo_channel_all failed with %#x\n", s32Ret);
+		printf("mmf_del_vo_channel_all failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 	return s32Ret;
@@ -709,19 +709,19 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 		CVI_TRACE_LOG(CVI_DBG_ERR, "CVI_VB_GetConfig NG\n");
 		return CVI_FAILURE;
 	}
-	SAMPLE_PRT(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>[%s[%d]\r\n", __func__, __LINE__);
-	SAMPLE_PRT("vb_config.u32MaxPoolCnt :%d\r\n", stVbConf.u32MaxPoolCnt);
+	printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>[%s[%d]\r\n", __func__, __LINE__);
+	printf("vb_config.u32MaxPoolCnt :%d\r\n", stVbConf.u32MaxPoolCnt);
 	for (int i = 0; i < stVbConf.u32MaxPoolCnt; ++i) {
-		SAMPLE_PRT("common pool[%d] BlkSize(%d) BlkCnt(%d) Remap(%d)\n", \
+		printf("common pool[%d] BlkSize(%d) BlkCnt(%d) Remap(%d)\n", \
 						i, \
 						stVbConf.astCommPool[i].u32BlkSize, \
 						stVbConf.astCommPool[i].u32BlkCnt, \
 						stVbConf.astCommPool[i].enRemapMode);
 	}
-	SAMPLE_PRT(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>[%s[%d]\r\n", __func__, __LINE__);
-	SAMPLE_PRT("vb_config.u32MaxPoolCnt :%d\r\n", vb_config.u32MaxPoolCnt);
+	printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>[%s[%d]\r\n", __func__, __LINE__);
+	printf("vb_config.u32MaxPoolCnt :%d\r\n", vb_config.u32MaxPoolCnt);
 	for (int i = 0; i < vb_config.u32MaxPoolCnt; ++i) {
-		SAMPLE_PRT("common pool[%d] BlkSize(%d) BlkCnt(%d) Remap(%d)\n", \
+		printf("common pool[%d] BlkSize(%d) BlkCnt(%d) Remap(%d)\n", \
 						i, \
 						vb_config.astCommPool[i].u32BlkSize, \
 						vb_config.astCommPool[i].u32BlkCnt, \
@@ -732,7 +732,7 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 
 	s32Ret = SAMPLE_COMM_SYS_Init(&stVbConf);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("system init failed with %#x\n", s32Ret);
+		printf("system init failed with %#x\n", s32Ret);
 		goto error;
 	}
 #if 0
@@ -743,10 +743,10 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 		CVI_TRACE_LOG(CVI_DBG_ERR, "CVI_VB_GetConfig NG\n");
 		return CVI_FAILURE;
 	}
-	SAMPLE_PRT(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>[%s[%d]\r\n", __func__, __LINE__);
+	printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>[%s[%d]\r\n", __func__, __LINE__);
 	for (int i = 0; i < vb_config.u32MaxPoolCnt; ++i) {
-		SAMPLE_PRT("vb_config.u32MaxPoolCnt :%d\r\n", vb_config.u32MaxPoolCnt);
-		SAMPLE_PRT("common pool[%d] BlkSize(%d) BlkCnt(%d) Remap(%d)\n", \
+		printf("vb_config.u32MaxPoolCnt :%d\r\n", vb_config.u32MaxPoolCnt);
+		printf("common pool[%d] BlkSize(%d) BlkCnt(%d) Remap(%d)\n", \
 						i, \
 						vb_config.astCommPool[i].u32BlkSize, \
 						vb_config.astCommPool[i].u32BlkCnt, \
@@ -769,7 +769,7 @@ static CVI_S32 _mmf_vpss_deinit(VPSS_GRP VpssGrp, VPSS_CHN VpssChn)
 	abChnEnable[VpssChn] = CVI_TRUE;
 	s32Ret = SAMPLE_COMM_VPSS_Stop(VpssGrp, abChnEnable);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("stop vpss group failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("stop vpss group failed. s32Ret: 0x%x !\n", s32Ret);
 	}
 
 	return s32Ret;
@@ -781,13 +781,13 @@ static CVI_S32 _mmf_vpss_deinit_new(VPSS_GRP VpssGrp)
 
 	s32Ret = CVI_VPSS_StopGrp(VpssGrp);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("Vpss Stop Grp %d failed! Please check param\n", VpssGrp);
+		printf("Vpss Stop Grp %d failed! Please check param\n", VpssGrp);
 		return CVI_FAILURE;
 	}
 
 	s32Ret = CVI_VPSS_DestroyGrp(VpssGrp);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("Vpss Destroy Grp %d failed! Please check\n", VpssGrp);
+		printf("Vpss Destroy Grp %d failed! Please check\n", VpssGrp);
 		return CVI_FAILURE;
 	}
 
@@ -874,7 +874,7 @@ int fps, int depth, bool mirror, bool flip, int fit)
 		crop_w = corp_scale_w < corp_scale_h ? stSizeOut.u32Width * corp_scale_w: stSizeOut.u32Width * corp_scale_h;
 		crop_h = corp_scale_w < corp_scale_h ? stSizeOut.u32Height * corp_scale_w: stSizeOut.u32Height * corp_scale_h;
 		if (corp_scale_h < 0 || corp_scale_w < 0) {
-			SAMPLE_PRT("crop scale error. corp_scale_w: %f, corp_scale_h: %f\n", corp_scale_w, corp_scale_h);
+			printf("crop scale error. corp_scale_w: %f, corp_scale_h: %f\n", corp_scale_w, corp_scale_h);
 			goto error;
 		}
 
@@ -889,31 +889,31 @@ int fps, int depth, bool mirror, bool flip, int fit)
 	abChnEnable[0] = CVI_TRUE;
 	s32Ret = SAMPLE_COMM_VPSS_Init(VpssGrp, abChnEnable, &stVpssGrpAttr, astVpssChnAttr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("init vpss group failed. s32Ret: 0x%x ! retry!!!\n", s32Ret);
+		printf("init vpss group failed. s32Ret: 0x%x ! retry!!!\n", s32Ret);
 		s32Ret = SAMPLE_COMM_VPSS_Stop(VpssGrp, abChnEnable);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("stop vpss group failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("stop vpss group failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 		s32Ret = SAMPLE_COMM_VPSS_Init(VpssGrp, abChnEnable, &stVpssGrpAttr, astVpssChnAttr);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("retry to init vpss group failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("retry to init vpss group failed. s32Ret: 0x%x !\n", s32Ret);
 			return s32Ret;
 		} else {
-			SAMPLE_PRT("retry to init vpss group ok!\n");
+			printf("retry to init vpss group ok!\n");
 		}
 	}
 
 	if (crop_w != 0 && crop_h != 0) {
 		s32Ret = CVI_VPSS_SetChnCrop(VpssGrp, VpssChn, &stGrpCropInfo);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("set vpss group crop failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("set vpss group crop failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error;
 		}
 	}
 
 	s32Ret = SAMPLE_COMM_VPSS_Start(VpssGrp, abChnEnable, &stVpssGrpAttr, astVpssChnAttr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("start vpss group failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("start vpss group failed. s32Ret: 0x%x !\n", s32Ret);
 		goto error;
 	}
 
@@ -935,7 +935,7 @@ static CVI_S32 _mmf_init(void)
 	LOG_LEVEL_CONF_S log_conf;
 
 	CVI_SYS_GetVersion(&stVersion);
-	SAMPLE_PRT("maix multi-media version:%s\n", stVersion.version);
+	printf("maix multi-media version:%s\n", stVersion.version);
 
 	log_conf.enModId = CVI_ID_LOG;
 	log_conf.s32Level = CVI_DBG_DEBUG;
@@ -943,7 +943,7 @@ static CVI_S32 _mmf_init(void)
 
 	// Get config from ini if found.
 	if (SAMPLE_COMM_VI_ParseIni(&stIniCfg)) {
-		SAMPLE_PRT("Parse complete\n");
+		printf("Parse complete\n");
 	}
 
 	//Set sensor number
@@ -964,13 +964,13 @@ static CVI_S32 _mmf_init(void)
 	 ************************************************/
 	s32Ret = SAMPLE_COMM_VI_GetSizeBySensor(stIniCfg.enSnsType[0], &enPicSize);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_COMM_VI_GetSizeBySensor failed with %#x\n", s32Ret);
+		printf("SAMPLE_COMM_VI_GetSizeBySensor failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
 	s32Ret = SAMPLE_COMM_SYS_GetPicSize(enPicSize, &stSize);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_COMM_SYS_GetPicSize failed with %#x\n", s32Ret);
+		printf("SAMPLE_COMM_SYS_GetPicSize failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
 
@@ -978,19 +978,19 @@ static CVI_S32 _mmf_init(void)
 	 * step3:  Init modules
 	 ************************************************/
 	if (0 != _free_leak_memory_of_ion()) {
-		SAMPLE_PRT("free leak memory error\n");
+		printf("free leak memory error\n");
 	}
 
 	s32Ret = _mmf_sys_init(stSize);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("sys init failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("sys init failed. s32Ret: 0x%x !\n", s32Ret);
 		goto _need_exit_sys_and_deinit_vi;
 	}
 
 	s32Ret = SAMPLE_PLAT_VI_INIT(&stViConfig);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("vi init failed. s32Ret: 0x%x !\n", s32Ret);
-		SAMPLE_PRT("Please try to check if the camera is working.\n");
+		printf("vi init failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("Please try to check if the camera is working.\n");
 		goto _need_exit_sys_and_deinit_vi;
 	}
 
@@ -1181,7 +1181,7 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 	memset(&chn_attr, 0, sizeof(chn_attr));
 	s32Ret = CVI_VPSS_GetGrpAttr(VpssGrp, &stGrpAttr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_GetGrpAttr failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("CVI_VPSS_GetGrpAttr failed. s32Ret: 0x%x !\n", s32Ret);
 		return s32Ret;
 	}
 	CVI_FLOAT corp_scale_w = (CVI_FLOAT)stGrpAttr.u32MaxW / width;
@@ -1241,7 +1241,7 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 		crop_w = corp_scale_w < corp_scale_h ? width * corp_scale_w: width * corp_scale_h;
 		crop_h = corp_scale_w < corp_scale_h ? height * corp_scale_w: height * corp_scale_h;
 		if (corp_scale_h < 0 || corp_scale_w < 0) {
-			SAMPLE_PRT("crop scale error. corp_scale_w: %f, corp_scale_h: %f\n", corp_scale_w, corp_scale_h);
+			printf("crop scale error. corp_scale_w: %f, corp_scale_h: %f\n", corp_scale_w, corp_scale_h);
 			return -1;
 		}
 
@@ -1255,20 +1255,20 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 	if (crop_w != 0 && crop_h != 0) {
 		s32Ret = CVI_VPSS_SetChnCrop(VpssGrp, VpssChn, &stChnCropInfo);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("set vpss group crop failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("set vpss group crop failed. s32Ret: 0x%x !\n", s32Ret);
 			return -1;
 		}
 	}
 
 	s32Ret = CVI_VPSS_SetChnAttr(VpssGrp, VpssChn, &chn_attr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_SetChnAttr failed with %#x\n", s32Ret);
+		printf("CVI_VPSS_SetChnAttr failed with %#x\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
 	s32Ret = CVI_VPSS_EnableChn(VpssGrp, VpssChn);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_EnableChn failed with %#x\n", s32Ret);
+		printf("CVI_VPSS_EnableChn failed with %#x\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -1296,13 +1296,13 @@ static CVI_S32 _mmf_vpss_chn_init(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, int width,
 
 	s32Ret = CVI_VPSS_SetChnAttr(VpssGrp, VpssChn, &chn_attr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_SetChnAttr failed with %#x\n", s32Ret);
+		printf("CVI_VPSS_SetChnAttr failed with %#x\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
 	s32Ret = CVI_VPSS_EnableChn(VpssGrp, VpssChn);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_EnableChn failed with %#x\n", s32Ret);
+		printf("CVI_VPSS_EnableChn failed with %#x\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -1335,12 +1335,12 @@ static CVI_S32 _mmf_vpss_init_new_with_fps(VPSS_GRP VpssGrp, CVI_U32 width, CVI_
 
 	s32Ret = CVI_VPSS_CreateGrp(VpssGrp, &stVpssGrpAttr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_CreateGrp(grp:%d) failed with %#x, retry!\n", VpssGrp, s32Ret);
+		printf("CVI_VPSS_CreateGrp(grp:%d) failed with %#x, retry!\n", VpssGrp, s32Ret);
 		CVI_VPSS_DestroyGrp(VpssGrp);
 
 		s32Ret = CVI_VPSS_CreateGrp(VpssGrp, &stVpssGrpAttr);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("CVI_VPSS_CreateGrp(grp:%d) failed with %#x!\n", VpssGrp, s32Ret);
+			printf("CVI_VPSS_CreateGrp(grp:%d) failed with %#x!\n", VpssGrp, s32Ret);
 			return CVI_FAILURE;
 		}
 	}
@@ -1349,13 +1349,13 @@ static CVI_S32 _mmf_vpss_init_new_with_fps(VPSS_GRP VpssGrp, CVI_U32 width, CVI_
 
 	s32Ret = CVI_VPSS_ResetGrp(VpssGrp);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_ResetGrp(grp:%d) failed with %#x!%d\n", VpssGrp, s32Ret, CVI_ERR_VPSS_ILLEGAL_PARAM);
+		printf("CVI_VPSS_ResetGrp(grp:%d) failed with %#x!%d\n", VpssGrp, s32Ret, CVI_ERR_VPSS_ILLEGAL_PARAM);
 		return CVI_FAILURE;
 	}
 
 	s32Ret = CVI_VPSS_StartGrp(VpssGrp);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_VPSS_StartGrp failed with %#x\n", s32Ret);
+		printf("CVI_VPSS_StartGrp failed with %#x\n", s32Ret);
 		return CVI_FAILURE;
 	}
 	return s32Ret;
@@ -1393,7 +1393,7 @@ int mmf_vi_init(void)
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	s32Ret = _mmf_vpss_init_new(0, priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 	}
 
 	priv.vi_is_inited = true;
@@ -1410,7 +1410,7 @@ int mmf_vi_deinit(void)
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	s32Ret = _mmf_vpss_deinit_new(0);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("_mmf_vpss_deinit_new failed with %#x!\n", s32Ret);
+		printf("_mmf_vpss_deinit_new failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -1462,16 +1462,16 @@ static int _mmf_add_vi_channel(int ch, int width, int height, int format, int fp
 	bool flip = !g_priv.vi_vflip[ch];
 	s32Ret = _mmf_vpss_init(0, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, 2);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("vpss init failed. s32Ret: 0x%x. try again..\r\n", s32Ret);
+		printf("vpss init failed. s32Ret: 0x%x. try again..\r\n", s32Ret);
 		s32Ret = _mmf_vpss_deinit(0, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 			return -1;
 		}
 
 		s32Ret = _mmf_vpss_init(0, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, 2);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
 			return -1;
 		}
 	}
@@ -1488,19 +1488,19 @@ _need_deinit_vpss:
 	PIXEL_FORMAT_E format_out = (PIXEL_FORMAT_E)format;
 	s32Ret = _mmf_vpss_chn_deinit(0, ch);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
+		printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
 	s32Ret = _mmf_vpss_chn_init(0, ch, width_out, height_out, format_out, fps, depth, mirror, flip, fit);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
+		printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
 	s32Ret = SAMPLE_COMM_VI_Bind_VPSS(0, ch, 0);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		goto _need_deinit_vpss_chn;
 	}
 
@@ -1531,12 +1531,12 @@ int mmf_del_vi_channel(int ch) {
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	s32Ret = SAMPLE_COMM_VI_UnBind_VPSS(0, ch, 0);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		// return -1; // continue to deinit vpss
 	}
 
 	if (0 != _mmf_vpss_chn_deinit(0, ch)) {
-		SAMPLE_PRT("_mmf_vpss_chn_deinit failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("_mmf_vpss_chn_deinit failed. s32Ret: 0x%x !\n", s32Ret);
 	}
 
 	priv.vi_chn_is_inited[ch] = false;
@@ -1671,7 +1671,7 @@ void mmf_vi_frame_free(int ch) {
 		frame->stVFrame.pu8VirAddr[0] = NULL;
 	}
 	if (CVI_VPSS_ReleaseChnFrame(0, ch, frame) != 0)
-			SAMPLE_PRT("CVI_VI_ReleaseChnFrame NG\n");
+			printf("CVI_VI_ReleaseChnFrame NG\n");
 }
 
 // manage vo channels
@@ -1733,7 +1733,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 		CVI_VO_Get_Panel_Status(0, ch, &panel_init);
 		if (panel_init) {
 			CVI_VO_GetPubAttr(0, &stVoPubAttr);
-			SAMPLE_PRT("Panel w=%d, h=%d.\n",\
+			printf("Panel w=%d, h=%d.\n",\
 					stVoPubAttr.stSyncInfo.u16Hact, stVoPubAttr.stSyncInfo.u16Vact);
 			stDefDispRect.u32Width = stVoPubAttr.stSyncInfo.u16Hact;
 			stDefDispRect.u32Height = stVoPubAttr.stSyncInfo.u16Vact;
@@ -1742,7 +1742,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 		}
 		s32Ret = SAMPLE_COMM_VO_GetDefConfig(&stVoConfig);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("SAMPLE_COMM_VO_GetDefConfig failed with %#x\n", s32Ret);
+			printf("SAMPLE_COMM_VO_GetDefConfig failed with %#x\n", s32Ret);
 			return -1;
 		}
 
@@ -1755,7 +1755,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 		stVoConfig.enVoMode	 = VO_MODE_1MUX;
 		s32Ret = SAMPLE_COMM_VO_StartVO(&stVoConfig);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("SAMPLE_COMM_VO_StartVO failed with %#x\n", s32Ret);
+			printf("SAMPLE_COMM_VO_StartVO failed with %#x\n", s32Ret);
 			return -1;
 		}
 
@@ -1789,31 +1789,31 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 #if 1
 		s32Ret = _mmf_vpss_deinit_new(1);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_stop_vo;
 		}
 
 		s32Ret = _mmf_vpss_init_new(1, stSizeIn.u32Width, stSizeIn.u32Height, formatIn);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_stop_vo;
 		}
 
 		s32Ret = _mmf_vpss_chn_deinit(1, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
+			printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 			goto error_and_deinit_vpss;
 		}
 
 		s32Ret = _mmf_vpss_chn_init(1, ch, stSizeOut.u32Width, stSizeOut.u32Height, formatOut, fps, depth, mirror, flip, fit);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
+			printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 			goto error_and_deinit_vpss;
 		}
 
 		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_deinit_vpss_chn;
 		}
 
@@ -1840,44 +1840,44 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 // error_and_unbind:
 // 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 // 		if (s32Ret != CVI_SUCCESS) {
-// 			SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+// 			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 // 		}
 error_and_deinit_vpss:
 		s32Ret = _mmf_vpss_deinit_new(1);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_deinit_vpss_chn:
 		s32Ret = _mmf_vpss_chn_deinit(1, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_stop_vo:
 		s32Ret = SAMPLE_COMM_VO_StopVO(&stVoConfig);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 		return -1;
 #else
 		s32Ret = _mmf_vpss_init(1, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vpss init failed. s32Ret: 0x%x. try again..\r\n", s32Ret);
+			printf("vpss init failed. s32Ret: 0x%x. try again..\r\n", s32Ret);
 			s32Ret = _mmf_vpss_deinit(1, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 				goto error_and_stop_vo;
 			}
 
 			s32Ret = _mmf_vpss_init(1, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
 				goto error_and_stop_vo;
 			}
 		}
 
 		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_deinit_vpss;
 		}
 
@@ -1904,17 +1904,17 @@ error_and_stop_vo:
 error_and_stop_vo:
 		s32Ret = SAMPLE_COMM_VO_StopVO(&stVoConfig);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_unbind:
 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_deinit_vpss:
 		s32Ret = _mmf_vpss_deinit(1, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			SAMPLE_PRT("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 		return -1;
 #endif
@@ -1977,23 +1977,23 @@ int mmf_del_vo_channel(int layer, int ch) {
 		}
 
 		if (CVI_SUCCESS != SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch)) {
-			SAMPLE_PRT("vi unbind vpss failed.!\n");
+			printf("vi unbind vpss failed.!\n");
 		}
 #if 0
 		if (0 != _mmf_vpss_deinit(1, ch)) {
-			SAMPLE_PRT("vpss deinit failed.!\n");
+			printf("vpss deinit failed.!\n");
 		}
 #else
 		if (0 != _mmf_vpss_chn_deinit(1, ch)) {
-			SAMPLE_PRT("_mmf_vpss_chn_deinit failed!\n");
+			printf("_mmf_vpss_chn_deinit failed!\n");
 		}
 
 		if (0 != _mmf_vpss_deinit_new(1)) {
-			SAMPLE_PRT("_mmf_vpss_deinit_new failed!\n");
+			printf("_mmf_vpss_deinit_new failed!\n");
 		}
 #endif
 		if (CVI_SUCCESS != SAMPLE_COMM_VO_StopVO(&priv.vo_video_cfg[ch])) {
-			SAMPLE_PRT("SAMPLE_COMM_VO_StopVO failed with %#x\n", CVI_FAILURE);
+			printf("SAMPLE_COMM_VO_StopVO failed with %#x\n", CVI_FAILURE);
 			return CVI_FAILURE;
 		}
 
@@ -2039,7 +2039,7 @@ int mmf_del_vo_channel_all(int layer) {
 			if (priv.vo_video_chn_is_inited[i] == true) {
 				s32Ret = mmf_del_vo_channel(layer, i);
 				if (s32Ret != CVI_SUCCESS) {
-					SAMPLE_PRT("mmf_del_vo_channel failed with %#x\n", s32Ret);
+					printf("mmf_del_vo_channel failed with %#x\n", s32Ret);
 					// return s32Ret; // continue to del other chn
 				}
 			}
@@ -2050,7 +2050,7 @@ int mmf_del_vo_channel_all(int layer) {
 			if (priv.vo_osd_chn_is_inited[i] == true) {
 				s32Ret = mmf_del_vo_channel(layer, i);
 				if (s32Ret != CVI_SUCCESS) {
-					SAMPLE_PRT("mmf_del_vo_channel failed with %#x\n", s32Ret);
+					printf("mmf_del_vo_channel failed with %#x\n", s32Ret);
 					// return s32Ret; // continue to del other chn
 				}
 			}
@@ -2115,37 +2115,37 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 			int flip_out = !g_priv.vo_video_vflip[ch];
 			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_deinit_new(1);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_init_new(1, width, height, (PIXEL_FORMAT_E)format);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_chn_deinit(1, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
+				printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_chn_init(1, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
+				printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 		}
@@ -2214,43 +2214,43 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			int flip_out = !g_priv.vo_video_vflip[ch];
 			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_deinit_new(1);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_init_new(1, width, height, (PIXEL_FORMAT_E)format);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_chn_deinit(1, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
+				printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = _mmf_vpss_chn_init(1, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
+				printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
 			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 #else
 			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
@@ -2272,16 +2272,16 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			int fit = priv.vo_vpss_fit[ch];
 			s32Ret = _mmf_vpss_init(1, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
-			// SAMPLE_PRT("vpss vo reinit.\r\n");
-			// SAMPLE_PRT("stSizeIn.u32Width: %d, stSizeIn.u32Height: %d, stSizeOut.u32Width: %d, stSizeOut.u32Height: %d formatOut:%d\n",
+			// printf("vpss vo reinit.\r\n");
+			// printf("stSizeIn.u32Width: %d, stSizeIn.u32Height: %d, stSizeOut.u32Width: %d, stSizeOut.u32Height: %d formatOut:%d\n",
 			// 						stSizeIn.u32Width, stSizeIn.u32Height, stSizeOut.u32Width, stSizeOut.u32Height, formatOut);
 			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				SAMPLE_PRT("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				_mmf_vpss_deinit(1, ch);
 				return -1;
 			}
@@ -2316,7 +2316,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			// 	CVI_U32 crop_w = corp_scale_w < corp_scale_h ? priv.vo_vpss_out_size[ch].u32Width * corp_scale_w: priv.vo_vpss_out_size[ch].u32Width * corp_scale_h;
 			// 	CVI_U32 crop_h = corp_scale_w < corp_scale_h ? priv.vo_vpss_out_size[ch].u32Height * corp_scale_w: priv.vo_vpss_out_size[ch].u32Height * corp_scale_h;
 			// 	if (corp_scale_h < 0 || corp_scale_w < 0) {
-			// 		SAMPLE_PRT("crop scale error. corp_scale_w: %d, corp_scale_h: %d\n", corp_scale_w, corp_scale_h);
+			// 		printf("crop scale error. corp_scale_w: %d, corp_scale_h: %d\n", corp_scale_w, corp_scale_h);
 			// 		return -1;
 			// 	}
 			// } else
@@ -2474,17 +2474,17 @@ static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYP
 	RGN_CHN_ATTR_S stChnAttr;
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("HandleId is illegal %d!\n", ch);
+		printf("HandleId is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
 	if (enType != OVERLAY_RGN) {
-		SAMPLE_PRT("enType is illegal %d!\n", enType);
+		printf("enType is illegal %d!\n", enType);
 		return CVI_FAILURE;
 	}
 
 	if (pstChn == CVI_NULL) {
-		SAMPLE_PRT("pstChn is NULL !\n");
+		printf("pstChn is NULL !\n");
 		return CVI_FAILURE;
 	}
 	memset(&stChnAttr, 0, sizeof(stChnAttr));
@@ -2541,7 +2541,7 @@ static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYP
 	}
 	s32Ret = CVI_RGN_AttachToChn(ch, pstChn, &stChnAttr);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_REGION_AttachToChn failed!\n");
+		printf("SAMPLE_REGION_AttachToChn failed!\n");
 		return s32Ret;
 	}
 
@@ -2554,11 +2554,11 @@ static int _mmf_region_init(int ch, int type, int width, int height, int format)
 	RGN_ATTR_S stRegion;
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 	if (type != OVERLAY_RGN) {
-		SAMPLE_PRT("enType is illegal %d!\n", type);
+		printf("enType is illegal %d!\n", type);
 		return CVI_FAILURE;
 	}
 
@@ -2575,7 +2575,7 @@ static int _mmf_region_init(int ch, int type, int width, int height, int format)
 	stRegion.unAttr.stOverlay.stCompressInfo.enOSDCompressMode = OSD_COMPRESS_MODE_NONE;
 	s32Ret = CVI_RGN_Create(ch, &stRegion);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_Create failed with %#x!\n", s32Ret);
+		printf("CVI_RGN_Create failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -2598,7 +2598,7 @@ static int _mmf_region_bind(int ch, int mod_id, int dev_id, int chn_id, int x, i
 	};
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
@@ -2613,7 +2613,7 @@ static int _mmf_region_bind(int ch, int mod_id, int dev_id, int chn_id, int x, i
 	RGN_TYPE_E type = (RGN_TYPE_E)priv.rgn_type[ch];
 	s32Ret = SAMPLE_COMM_REGION_AttachToChn2(ch, x, y, type, &stChn);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("SAMPLE_COMM_REGION_AttachToChn failed!\n");
+		printf("SAMPLE_COMM_REGION_AttachToChn failed!\n");
 		return s32Ret;
 	}
 
@@ -2630,7 +2630,7 @@ static int _mmf_region_unbind(int ch)
 	CVI_S32 s32Ret;
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
@@ -2650,7 +2650,7 @@ static int _mmf_region_unbind(int ch)
 
 	s32Ret = CVI_RGN_DetachFromChn(ch, &stChn);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_DetachFromChn %d failed!\n", ch);
+		printf("CVI_RGN_DetachFromChn %d failed!\n", ch);
 	}
 
 	priv.rgn_is_bind[ch] = false;
@@ -2661,7 +2661,7 @@ static int _mmf_region_unbind(int ch)
 static int _mmf_region_deinit(int ch)
 {
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
@@ -2675,7 +2675,7 @@ static int _mmf_region_deinit(int ch)
 
 	CVI_S32 s32Ret = CVI_RGN_Destroy(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_Destroy failed with %#x!\n", s32Ret);
+		printf("CVI_RGN_Destroy failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -2732,7 +2732,7 @@ int mmf_region_get_canvas(int ch, void **data, int *width, int *height, int *for
 	RGN_CANVAS_INFO_S stCanvasInfo;
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
@@ -2746,7 +2746,7 @@ int mmf_region_get_canvas(int ch, void **data, int *width, int *height, int *for
 
 	s32Ret = CVI_RGN_GetCanvasInfo(ch, &stCanvasInfo);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_GetCanvasInfo failed with %#x!\n", s32Ret);
+		printf("CVI_RGN_GetCanvasInfo failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -2763,7 +2763,7 @@ int mmf_region_update_canvas(int ch)
 	CVI_S32 s32Ret;
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
@@ -2777,7 +2777,7 @@ int mmf_region_update_canvas(int ch)
 
 	s32Ret = CVI_RGN_UpdateCanvas(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_UpdateCanvas failed with %#x!\n", s32Ret);
+		printf("CVI_RGN_UpdateCanvas failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 	return s32Ret;
@@ -2818,7 +2818,7 @@ int mmf_region_frame_push(int ch, void *data, int len)
 	RGN_CANVAS_INFO_S stCanvasInfo;
 
 	if (ch < 0 || ch >= MMF_RGN_MAX_NUM) {
-		SAMPLE_PRT("Handle ch is illegal %d!\n", ch);
+		printf("Handle ch is illegal %d!\n", ch);
 		return CVI_FAILURE;
 	}
 
@@ -2832,7 +2832,7 @@ int mmf_region_frame_push(int ch, void *data, int len)
 
 	s32Ret = CVI_RGN_GetCanvasInfo(ch, &stCanvasInfo);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_GetCanvasInfo failed with %#x!\n", s32Ret);
+		printf("CVI_RGN_GetCanvasInfo failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -2849,7 +2849,7 @@ int mmf_region_frame_push(int ch, void *data, int len)
 
 	s32Ret = CVI_RGN_UpdateCanvas(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("CVI_RGN_UpdateCanvas failed with %#x!\n", s32Ret);
+		printf("CVI_RGN_UpdateCanvas failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 	return s32Ret;
@@ -4442,7 +4442,7 @@ int mmf_vdec_free(int ch)
 	}
 
 	if (s32Ret != 0) {
-		SAMPLE_PRT("CVI_VDEC_ReleaseFrame NG\n");
+		printf("CVI_VDEC_ReleaseFrame NG\n");
 		return -1;
 	}
 
@@ -5140,7 +5140,7 @@ int mmf_vi_init0(uint32_t param, ...)
 	UNUSED(vi_cfg);
 	s32Ret = _mmf_vpss_init_new_with_fps(0, priv.vi_size.u32Width, priv.vi_size.u32Height, (PIXEL_FORMAT_E)vpss_format, fps);
 	if (s32Ret != CVI_SUCCESS) {
-		SAMPLE_PRT("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 	}
 
 	priv.vi_is_inited = true;
