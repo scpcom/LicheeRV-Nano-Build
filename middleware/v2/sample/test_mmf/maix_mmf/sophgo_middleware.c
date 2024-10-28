@@ -2462,7 +2462,7 @@ int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int hei
 	return mmf_vo_frame_push_with_fit(layer, ch, data, len, width, height, format, priv.vo_vpss_fit[ch]);
 }
 
-static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYPE_E enType, MMF_CHN_S *pstChn)
+static CVI_S32 _mmf_region_attach_to_channel(CVI_S32 ch, int x, int y, RGN_TYPE_E enType, MMF_CHN_S *pstChn)
 {
 #define OverlayMinHandle 0
 #define OverlayExMinHandle 20
@@ -2541,7 +2541,7 @@ static CVI_S32 SAMPLE_COMM_REGION_AttachToChn2(CVI_S32 ch, int x, int y, RGN_TYP
 	}
 	s32Ret = CVI_RGN_AttachToChn(ch, pstChn, &stChnAttr);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("SAMPLE_REGION_AttachToChn failed!\n");
+		printf("CVI_RGN_AttachToChn failed!\n");
 		return s32Ret;
 	}
 
@@ -2611,9 +2611,9 @@ static int _mmf_region_bind(int ch, int mod_id, int dev_id, int chn_id, int x, i
 	}
 
 	RGN_TYPE_E type = (RGN_TYPE_E)priv.rgn_type[ch];
-	s32Ret = SAMPLE_COMM_REGION_AttachToChn2(ch, x, y, type, &stChn);
+	s32Ret = _mmf_region_attach_to_channel(ch, x, y, type, &stChn);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("SAMPLE_COMM_REGION_AttachToChn failed!\n");
+		printf("_mmf_region_attach_to_channel failed!\n");
 		return s32Ret;
 	}
 
