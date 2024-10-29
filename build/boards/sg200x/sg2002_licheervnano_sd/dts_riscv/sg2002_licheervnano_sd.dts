@@ -145,6 +145,23 @@
 
 &spi2 {
 	status = "okay";
+
+        // /delete-node/ spidev@0;
+        st7789: st7789@0{
+		compatible = "sitronix,st7789";
+		reg = <0>;
+		status = "disabled";
+		spi-max-frequency = <80000000>;
+		spi-cpol;
+		spi-cpha;
+		rotate = <0>;
+		fps = <60>;
+		rgb;
+		buswidth = <8>;
+		dc = <&porte 20 GPIO_ACTIVE_HIGH>;
+		reset = <&porta 14 GPIO_ACTIVE_LOW>;
+		debug = <0>;
+	};
 };
 
 &spi3 {
@@ -231,12 +248,12 @@
                 reg_names = "core_mem";
                 src-frequency = <375000000>;
                 min-frequency = <400000>; // 400Khz
-                max-frequency = <50000000>; // 50Mhz
+                //max-frequency = <50000000>; // 50Mhz
                 //max-frequency = <45000000>; // 45Mhz
                 //max-frequency = <40000000>; // 40Mhz
                 //max-frequency = <35000000>; // 35Mhz
                 //max-frequency = <30000000>; // 30Mhz
-                //max-frequency = <25000000>; // 25Mhz
+                max-frequency = <25000000>; // 25Mhz
                 //max-frequency = <20000000>; // 20Mhz
                 //max-frequency = <15000000>; // 15Mhz
                 //max-frequency = <10000000>; // 10Mhz
