@@ -13,7 +13,12 @@ typedef struct {
     int count;
 } mmf_stream_t;
 
-#define mmf_h265_stream_t mmf_stream_t
+// old struct, must keep same as mmf_stream_t
+typedef struct {
+    uint8_t *data[8];
+    int data_size[8];
+    int count;
+} mmf_h265_stream_t;
 
 typedef struct {
     uint8_t type;           // 0, jpg; 1, h265; 2, h264
@@ -35,15 +40,49 @@ typedef struct {
     int buffer_num;
 } mmf_vdec_cfg_t;
 
+typedef struct {
+    void *data;
+    int len;
+    int w;
+	int h;
+	int fmt;
+} mmf_frame_info_t;
+
+typedef struct {
+    int chn;
+    int w;
+    int h;
+    int fmt;
+    int fps;
+    int depth;
+} mmf_vi_cfg_t;
+
+typedef struct {
+    struct {
+        int size;
+        int count;
+        /*
+            VB_REMAP_MODE_NONE = 0,
+            VB_REMAP_MODE_NOCACHE = 1,
+            VB_REMAP_MODE_CACHED = 2,
+            VB_REMAP_MODE_BUTT
+        */
+        int map;
+    } vb_pool[16];
+    int max_pool_cnt;
+} mmf_sys_cfg_t;
+
 // init sys
 int mmf_init(void);
 int mmf_deinit(void);
 int mmf_try_deinit(bool force);
 bool mmf_is_init(void);
+void mmf_pre_config_sys(mmf_sys_cfg_t *cfg);
 
 // manage vi channels(vi->vpssgroup->vpss->frame)
 int mmf_get_vi_unused_channel(void);
 int mmf_vi_init(void);
+int mmf_vi_init2(mmf_vi_cfg_t *vi_info);
 int mmf_vi_deinit(void);
 int mmf_vi_get_max_size(int *width, int *height);
 int mmf_add_vi_channel(int ch, int width, int height, int format);
@@ -62,6 +101,8 @@ void mmf_vi_set_pop_timeout(int ms);
 // get vi frame
 int mmf_vi_frame_pop(int ch, void **data, int *len, int *width, int *height, int *format);
 void mmf_vi_frame_free(int ch);
+int mmf_vi_frame_pop2(int ch, void **frame_info,  mmf_frame_info_t *frame_info_mmap);
+void mmf_vi_frame_free2(int ch, void **frame_info);
 
 // manage vo channels
 int mmf_get_vo_unused_channel(int layer);
@@ -78,6 +119,7 @@ void mmf_get_vo_video_flip(int ch, bool *en);
 // flush vo
 int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width, int height, int format, int fit);
 int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int height, int format);
+int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info);
 
 // rgn
 int mmf_get_region_unused_channel(void);
@@ -101,7 +143,11 @@ int mmf_enc_jpg_free(int ch);
 int mmf_enc_h265_init(int ch, int w, int h);
 int mmf_enc_h265_deinit(int ch);
 int mmf_enc_h265_push(int ch, uint8_t *data, int w, int h, int format);
+int mmf_enc_h265_push2(int ch, void *frame_info);
 int mmf_enc_h265_pop(int ch, mmf_h265_stream_t *stream);
+#ifdef __cplusplus
+int mmf_enc_h265_pop(int ch, mmf_stream_t *stream);
+#endif
 int mmf_enc_h265_free(int ch);
 
 // invert format
@@ -148,9 +194,21 @@ int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg);
 int mmf_del_venc_channel(int ch);
 int mmf_del_venc_channel_all();
 int mmf_venc_push(int ch, uint8_t *data, int w, int h, int format);
+int mmf_venc_push2(int ch, void *frame_info);
 int mmf_venc_pop(int ch, mmf_stream_t *stream);
 int mmf_venc_free(int ch);
 int mmf_venc_get_cfg(int ch, mmf_venc_cfg_t *cfg);
+
+// vdec
+int mmf_vdec_unused_channel(void);
+int mmf_vdec_is_used(int ch);
+int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg);
+int mmf_del_vdec_channel(int ch);
+int mmf_del_vdec_channel_all();
+int mmf_vdec_push(int ch, uint8_t *data, int size, uint8_t is_start, uint8_t is_end);
+int mmf_vdec_pop(int ch, void **data, int *len, int *width, int *height, int *format);
+int mmf_vdec_free(int ch);
+int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg);
 
 int mmf_init0(uint32_t param, ...);
 int mmf_deinit0(uint32_t param, ...);
@@ -160,6 +218,8 @@ int mmf_add_vo_channel0(uint32_t param, ...);
 int mmf_add_region_channel0(uint32_t param, ...);
 int mmf_add_venc_channel0(uint32_t param, ...);
 int mmf_add_vdec_channel0(uint32_t param, ...);
+int mmf_vdec_push0(uint32_t param, ...);
+int mmf_vdec_pop0(uint32_t param, ...);
 
 static inline int mmf_init_v2(int reload_kmod) {
     return mmf_init0(MMF_FUNC_SET_PARAM(0, 1), reload_kmod);
@@ -193,4 +253,11 @@ static inline int mmf_add_vdec_channel_v2(int ch, int format_out, int pool_num, 
     return mmf_add_vdec_channel0(MMF_FUNC_SET_PARAM(0, 4), ch, format_out, pool_num, cfg);
 }
 
+static inline int mmf_vdec_push_v2(int ch, VDEC_STREAM_S *stStream) {
+    return mmf_vdec_push0(MMF_FUNC_SET_PARAM(0, 2), ch, stStream);
+}
+
+static inline int mmf_vdec_pop_v2(int ch, VIDEO_FRAME_INFO_S *frame) {
+    return mmf_vdec_pop0(MMF_FUNC_SET_PARAM(0, 2), ch, frame);
+}
 #endif // __SOPHGO_MIDDLEWARE_HPP__

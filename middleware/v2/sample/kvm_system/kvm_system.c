@@ -4,8 +4,14 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-#include "sample_comm.h"
-#include "cvi_sys.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <syslog.h>
+#include <string.h>
+
+#include "cvi_buffer.h"
 #include <linux/cvi_type.h>
 
 #include <unistd.h>
@@ -70,7 +76,7 @@ int oled_i2c_init(uint8_t _EN, int * oled_dev)
 		sprintf(i2c_dev, "/dev/i2c-%hhd", oled_i2c_bus);
 		*oled_dev = open(i2c_dev, O_RDWR, 0600);
 		if (*oled_dev < 0) {
-			CVI_TRACE_SNS(CVI_DBG_ERR, "Open %s error!\n", i2c_dev);
+			printf("%s: Open %s error!\n", __func__, i2c_dev);
 			return CVI_FAILURE;
 		}
 
@@ -108,7 +114,7 @@ int oled_read_register(int _fb, uint8_t addr)
 
 	ret = write(_fb, buf, 1);
 	if (ret < 0) {
-		CVI_TRACE_SNS(CVI_DBG_ERR, "I2C_WRITE error!\n");
+		printf("%s: I2C_WRITE error!\n", __func__);
 		return ret;
 	}
 
@@ -116,7 +122,7 @@ int oled_read_register(int _fb, uint8_t addr)
 	buf[1] = 0;
 	ret = read(_fb, buf, 1);
 	if (ret < 0) {
-		CVI_TRACE_SNS(CVI_DBG_ERR, "I2C_READ error!\n");
+		printf("%s: I2C_READ error!\n", __func__);
 		return ret;
 	}
 
@@ -141,7 +147,7 @@ int oled_write_register(int _fb, uint8_t mode, uint8_t data)
 
 	ret = write(_fb, buf, 2);
 	if (ret < 0) {
-		CVI_TRACE_SNS(CVI_DBG_ERR, "I2C_WRITE error!\n");
+		printf("%s: I2C_WRITE error!\n", __func__);
 		return CVI_FAILURE;
 	}
 	syslog(LOG_DEBUG, "i2c w 0x%x 0x%x\n", mode, data);
