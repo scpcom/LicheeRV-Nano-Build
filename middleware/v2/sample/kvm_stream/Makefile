@@ -9,21 +9,9 @@ SDIR = $(PWD)
 SRCS = $(wildcard $(SDIR)/*.c)
 INCS = -I$(MW_INC) -I$(ISP_INC) -I../common/ -I$(KERNEL_INC) -I$(MW_INC)/linux -I$(SDIR)
 
-#SRCS_CPP += $(wildcard $(SDIR)/stream_server/src/*.cpp)
-
-CFLAGS += -I$(SDIR)/../test_mmf \
--I$(SDIR)/stream_server/inc
-CPPFLAGS += -I$(SDIR)/libstream/include \
--I$(SDIR)/libstream/source/server \
--I$(SDIR)/../test_mmf \
--I$(SDIR)/../test_mmf/media_server-1.0.1/sdk/include \
--I$(SDIR)/../test_mmf/media_server-1.0.1/sdk/libhttp/include \
--I$(SDIR)/stream_server/inc \
--D__ERROR__=00*10000000+__LINE__*1000
-
+CFLAGS += -I$(SDIR)/../test_mmf
 
 OBJS = $(SRCS:.c=.o)
-#OBJS += $(SRCS_CPP:.cpp=.o)
 DEPS = $(SRCS:.c=.d)
 
 TARGET = kvm_stream
@@ -46,11 +34,9 @@ endif
 EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
-MSK_LIBD = ../test_mmf/media_server-1.0.1/release.linux
 MMF_LIBD = ../test_mmf/maix_mmf/release.linux
 
-LIBS += -L$(SDIR)/$(MSK_LIBD) -L$(MMF_LIBD)
-# -lstream -lhttp -lsdk
+LIBS += -L$(MMF_LIBD)
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -69,17 +55,9 @@ endif
 all: $(TARGET)
 
 mmflibs:
-	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/media_server-1.0.1/sdk/
-	#@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C libstream/
-	@mkdir -p $(MSK_LIBD)
-	@cp -p ../test_mmf/media_server-1.0.1/sdk/libhttp/release.linux/libhttp.a $(MSK_LIBD)/
-	@cp -p ../test_mmf/media_server-1.0.1/sdk/libsdk/release.linux/libsdk.a $(MSK_LIBD)/
-	#@cp -p libstream/release.linux/libstream.a $(MSK_LIBD)/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maix_mmf/
 
 clean_mmflibs:
-	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/media_server-1.0.1/sdk/ clean
-	#@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C libstream/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maix_mmf/ clean
 
 $(COMMON_DIR)/%.o: $(COMMON_DIR)/%.c
