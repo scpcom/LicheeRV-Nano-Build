@@ -686,6 +686,11 @@ int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 	mmf_cfg->img_fps = kvm_cfg.fps > 60 ? mmf_cfg->img_fps : (int32_t)kvm_cfg.fps;
 	mmf_cfg->img_qlty = (kvm_cfg.qlty < 50 || kvm_cfg.qlty > 100) ? mmf_cfg->img_qlty : (int32_t)kvm_cfg.qlty;
 
+	mmf_cfg->vi_ch = mmf_get_vi_unused_channel();
+	int vi_al = mmf_vi_aligned_width(mmf_cfg->vi_ch);
+	if (vi_al > 0)
+		mmf_cfg->img_w = ALIGN(mmf_cfg->img_w, vi_al);
+
 	mmf_cfg->enc_ch = mmf_venc_unused_channel();
 	if (kvm_stream_venc_init(mmf_cfg->enc_ch, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt, mmf_cfg->img_qlty)) {
 		printf("kvm_stream_venc_init failed\n");
