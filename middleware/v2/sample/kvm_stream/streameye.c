@@ -31,14 +31,24 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "common.h"
 #include "streameye.h"
 #include "auth.h"
+#ifdef __cplusplus
+}
+#endif
 
 #include "cvi_buffer.h"
 
 #include "sample_comm.h"
+#ifdef __cplusplus
+#include "sophgo_middleware.hpp"
+#else
 #include "maix_mmf.h"
+#endif
 
     /* locals */
 
@@ -88,6 +98,9 @@ static client_t **clients = NULL;
 static int num_clients = 0;
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
     /* globals */
 
 int log_level = 1; /* 0 - quiet, 1 - info, 2 - debug */
@@ -261,6 +274,9 @@ void print_help() {
     fprintf(stderr, "    -t timeout         client read/write timeout, in seconds (defaults to %d)\n", DEF_CLIENT_TIMEOUT);
     fprintf(stderr, "\n");
 }
+#ifdef __cplusplus
+}
+#endif
 
 double get_now() {
     struct timeval tv;

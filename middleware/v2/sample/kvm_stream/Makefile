@@ -9,7 +9,7 @@ SDIR = $(PWD)
 SRCS = $(wildcard $(SDIR)/*.c)
 INCS = -I$(MW_INC) -I$(ISP_INC) -I../common/ -I$(KERNEL_INC) -I$(MW_INC)/linux -I$(SDIR)
 
-CFLAGS += -I$(SDIR)/../test_mmf
+CFLAGS += -I$(SDIR)/../test_mmf/maixcam_lib/include
 
 OBJS = $(SRCS:.c=.o)
 DEPS = $(SRCS:.c=.d)
@@ -18,6 +18,7 @@ TARGET = kvm_stream
 ifeq ($(CONFIG_ENABLE_SDK_ASAN), y)
 TARGET = kvm_stream_asan
 endif
+ORIGIN = /kvmapp/$(TARGET)
 
 PKG_CONFIG_PATH = $(MW_PATH)/pkgconfig
 REQUIRES = cvi_common cvi_sample
@@ -25,7 +26,7 @@ REQUIRES = cvi_common cvi_sample
 
 MW_LIBS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config --libs --define-variable=mw_dir=$(MW_PATH) $(REQUIRES))
 
-LIBS = $(MW_LIBS)
+LIBS = $(filter-out -lsample, $(filter-out -lsns_full, $(MW_LIBS)))
 ifeq ($(MULTI_PROCESS_SUPPORT), 1)
 DEFS += -DRPC_MULTI_PROCESS
 LIBS += -lnanomsg
@@ -34,9 +35,9 @@ endif
 EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
-MMF_LIBD = ../test_mmf/maix_mmf/release.linux
+MCL_LIBD = ../test_mmf/maixcam_lib/release.linux
 
-LIBS += -L$(MMF_LIBD)
+LIBS += -lvdec -L$(MCL_LIBD)
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -55,10 +56,10 @@ endif
 all: $(TARGET)
 
 mmflibs:
-	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maix_mmf/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maixcam_lib/
 
 clean_mmflibs:
-	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maix_mmf/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maixcam_lib/ clean
 
 $(COMMON_DIR)/%.o: $(COMMON_DIR)/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
@@ -68,8 +69,13 @@ $(SDIR)/%.o: $(SDIR)/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
 	@echo [$(notdir $(CC))] $(notdir $@)
 
+#$(SDIR)/%.o: $(SDIR)/%.cpp
+$(SDIR)/streameye.o: $(SDIR)/streameye.c
+	@$(CXX) $(DEPFLAGS) $(subst -std=gnu11,-std=gnu++11, $(CFLAGS)) $(EXTRA_CFLAGS) -o $@ -c $<
+	@echo [$(notdir $(CC))] $(notdir $@)
+
 $(TARGET): mmflibs $(COMM_OBJ) $(OBJS) $(ISP_OBJ) $(MW_LIB)/libvpu.a $(MW_LIB)/libsys.a
-	@$(CXX) -o $@ -Wl,--start-group $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaix_mmf $(ELFFLAGS) $(EXTRA_LDFLAGS)
+	@$(CXX) -o $@ -Wl,-rpath=$(ORIGIN)/dl_lib -Wl,--start-group $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaixcam_lib $(filter-out -static, $(ELFFLAGS)) $(EXTRA_LDFLAGS)
 	@echo -e $(BLUE)[LINK]$(END)[$(notdir $(CXX))] $(notdir $@)
 
 clean: clean_mmflibs
