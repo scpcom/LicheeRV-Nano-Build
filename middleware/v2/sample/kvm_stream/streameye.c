@@ -176,7 +176,7 @@ client_t *wait_for_client(int socket_fd) {
     setsockopt(stream_fd, SOL_SOCKET, SO_SNDTIMEO, (char *) &tv, sizeof(struct timeval));
 
     /* create client structure */
-    client_t *client = malloc(sizeof(client_t));
+    client_t *client = (client_t*)malloc(sizeof(client_t));
     if (!client) {
         ERROR("malloc() failed");
         return NULL;
@@ -221,7 +221,7 @@ void cleanup_client(client_t *client) {
     }
     free(client);
 
-    clients = realloc(clients, sizeof(client_t *) * (--num_clients));
+    clients = (client_t**)realloc(clients, sizeof(client_t *) * (--num_clients));
     DEBUG("current clients: %d", num_clients);
 
     if (pthread_mutex_unlock(&clients_mutex)) {
@@ -883,7 +883,7 @@ int main(int argc, char *argv[]) {
     if (!input_separator) {
         auto_separator = 1;
         input_separator_len = 4; /* strlen(JPEG_START) + strlen(JPEG_END) */;
-        input_separator = malloc(input_separator_len + 1);
+        input_separator = (char*)malloc(input_separator_len + 1);
         snprintf(input_separator, input_separator_len + 1, "%s%s", JPEG_END, JPEG_START);
     }
     else {
@@ -959,7 +959,7 @@ int main(int argc, char *argv[]) {
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
 
 		start = _get_time_us();
-		if (mmf_venc_push(mmf_cfg->enc_ch, data, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt)) {
+		if (mmf_venc_push(mmf_cfg->enc_ch, (uint8_t*)data, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt)) {
 			printf("mmf_venc_push failed\n");
 			break;
 		}
@@ -1155,7 +1155,7 @@ int main(int argc, char *argv[]) {
                     return -1;
                 }
 
-                clients = realloc(clients, sizeof(client_t *) * (num_clients + 1));
+                clients = (client_t**)realloc(clients, sizeof(client_t *) * (num_clients + 1));
                 clients[num_clients++] = client;
 
                 DEBUG("current clients: %d", num_clients);
