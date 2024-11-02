@@ -136,6 +136,7 @@ typedef struct {
 	VIDEO_FRAME_INFO_S dec_chn_frame[MMF_DEC_MAX_CHN];
 	VIDEO_FRAME_INFO_S *dec_pst_frame[MMF_DEC_MAX_CHN];
 	VDEC_STREAM_S dec_chn_stream[MMF_DEC_MAX_CHN];
+	SIZE_S dec_chn_size_in[MMF_DEC_MAX_CHN];
 	mmf_vdec_cfg_t dec_chn_cfg[MMF_DEC_MAX_CHN];
 
 	int vb_of_vi_is_config : 1;
@@ -175,6 +176,7 @@ static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
 
 static int mmf_vdec_deinit(int ch);
 static int _mmf_vdec_push(int ch, VDEC_STREAM_S *stStream);
+static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in);
 
 #define DISP_W	640
 #define DISP_H	480
@@ -3901,9 +3903,14 @@ static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality)
 	return mmf_add_venc_channel(ch, &cfg);
 }
 
-static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
+static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_out, SIZE_S size_in)
 {
 	int format_in = PIXEL_FORMAT_YUV_PLANAR_444; //PIXEL_FORMAT_YUV_PLANAR_420;
+	CVI_U32 w_in = size_in.u32Width;
+	CVI_U32 h_in = size_in.u32Height;
+	CVI_U32 w_out = chn_attr_out->u32PicWidth;
+	CVI_U32 h_out = chn_attr_out->u32PicHeight;
+	int fps_out = 30;
 
 	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		return -1;
@@ -3911,24 +3918,36 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	if (priv.dec_chn_is_init[ch])
 		return 0;
 
-	if ((format_out == PIXEL_FORMAT_RGB_888 && chn_attr->u32PicWidth * chn_attr->u32PicHeight * 3 > 640 * 480 * 3)
-		|| (format_out == PIXEL_FORMAT_NV21 && chn_attr->u32PicWidth * chn_attr->u32PicHeight * 3 / 2 > 2560 * 1440 * 3 / 2)) {
+	if ((format_out == PIXEL_FORMAT_RGB_888 && w_out * h_out * 3 > 640 * 480 * 3)
+		|| (format_out == PIXEL_FORMAT_NV21 && w_out * h_out * 3 / 2 > 2560 * 1440 * 3 / 2)) {
 		printf("image size is too large, for NV21, maximum resolution 2560x1440, for RGB888, maximum resolution 640x480!\n");
 		return -1;
 	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
+	VDEC_CHN_ATTR_S *chn_attr = (VDEC_CHN_ATTR_S *)malloc(sizeof(VDEC_CHN_ATTR_S));
+	if (!chn_attr) {
+		return -1;
+	}
+	memcpy(chn_attr, chn_attr_out, sizeof(VDEC_CHN_ATTR_S));
+	chn_attr->u32PicWidth = w_in;
+	chn_attr->u32PicHeight = h_in;
+	chn_attr->u32FrameBufCnt = 1;
+	chn_attr->u32FrameBufSize = VDEC_GetPicBufferSize(
+			chn_attr->enType, w_in, h_in,
+			(PIXEL_FORMAT_E)format_in, DATA_BITWIDTH_8, COMPRESS_MODE_NONE);
+	chn_attr->u32StreamBufSize = w_in * h_in; //ALIGN(w * h, 0x4000);
 
 	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
-		return s32Ret;
+		goto out_chn_attr;
 	}
 
 	s32Ret = CVI_VDEC_ResetChn(ch);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
-		return s32Ret;
+		goto out_chn_attr;
 	}
 
 	s32Ret = CVI_VDEC_DestroyChn(ch);
@@ -3939,7 +3958,7 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
-		return s32Ret;
+		goto out_chn_attr;
 	}
 
 	priv.dec_chn_vpss[ch] = VPSS_INVALID_GRP;
@@ -3949,22 +3968,20 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 		//fallthrough;
 	case PIXEL_FORMAT_NV21:
 	{
-		CVI_U32 w = chn_attr->u32PicWidth;
-		CVI_U32 h = chn_attr->u32PicHeight;
-		int fps_out = 30;
 		VPSS_GRP out_grp = CVI_VPSS_GetAvailableGrp();
 
 		if (out_grp == VPSS_INVALID_GRP) {
 			printf("VPSS get group failed\n");
 			CVI_VDEC_DestroyChn(ch);
-			return CVI_FAILURE;
+			s32Ret = CVI_FAILURE;
+			goto out_chn_attr;
 		}
 
-		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){w, h}, (SIZE_S){w, h}, (PIXEL_FORMAT_E)format_in, (PIXEL_FORMAT_E)format_out, fps_out, 0, CVI_FALSE, CVI_FALSE, 0);
+		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){w_in, h_in}, (SIZE_S){w_out, h_out}, (PIXEL_FORMAT_E)format_in, (PIXEL_FORMAT_E)format_out, fps_out, 0, CVI_FALSE, CVI_FALSE, 0);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS init failed with %d\n", s32Ret);
 			CVI_VDEC_DestroyChn(ch);
-			return s32Ret;
+			goto out_chn_attr;
 		}
 
 		s32Ret = SAMPLE_COMM_VDEC_Bind_VPSS(ch, out_grp);
@@ -3973,7 +3990,7 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 			_mmf_vpss_deinit(out_grp, ch);
 			CVI_VDEC_StopRecvStream(ch);
 			CVI_VDEC_DestroyChn(ch);
-			return s32Ret;
+			goto out_chn_attr;
 		}
 
 		priv.dec_chn_vpss[ch] = out_grp;
@@ -3986,14 +4003,16 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 		printf("unknown format %d (want %d)!\n", format_out, PIXEL_FORMAT_NV21);
 		CVI_VDEC_StopRecvStream(ch);
 		CVI_VDEC_DestroyChn(ch);
-		return -1;
+		s32Ret = CVI_FAILURE;
+		goto out_chn_attr;
 	}
 
 	VDEC_CHN_PARAM_S stChnParam;
 	s32Ret = CVI_VDEC_GetChnParam(ch, &stChnParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VDEC_GetChnParam failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
+		s32Ret = CVI_FAILURE;
+		goto out_vpss;
 	}
 
 	stChnParam.enPixelFormat = (PIXEL_FORMAT_E)format_in; //(PIXEL_FORMAT_E)format_out;
@@ -4002,25 +4021,40 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	s32Ret = CVI_VDEC_SetChnParam(ch, &stChnParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VDEC_SetChnParam failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
+		s32Ret = CVI_FAILURE;
+		goto out_vpss;
 	}
 
 	s32Ret = CVI_VDEC_StartRecvStream(ch);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VDEC_StartRecvPic failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
+		s32Ret = CVI_FAILURE;
+		goto out_vpss;
 	}
 
 	priv.dec_chn_type[ch] = PT_JPEG;
 	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_JPEG_ID;
 
-	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
-	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
+	priv.dec_chn_size_in[ch] = (SIZE_S){w_in, h_in};
+	priv.dec_chn_cfg[ch].w = w_out;
+	priv.dec_chn_cfg[ch].h = h_out;
 	priv.dec_chn_cfg[ch].fmt = format_out;
 	priv.dec_chn_cfg[ch].buffer_num = chn_attr->u32FrameBufCnt;
 	priv.dec_chn_is_init[ch] = 1;
 	priv.dec_chn_running[ch] = 0;
 
+	goto out_chn_attr;
+
+out_vpss:
+	if (priv.dec_chn_vpss[ch] != VPSS_INVALID_GRP)
+	{
+		VPSS_GRP out_grp = priv.dec_chn_vpss[ch];
+		SAMPLE_COMM_VDEC_UnBind_VPSS(ch, out_grp);
+		_mmf_vpss_deinit(out_grp, ch);
+		priv.dec_chn_vpss[ch] = VPSS_INVALID_GRP;
+	}
+out_chn_attr:
+	free(chn_attr);
 	return s32Ret;
 }
 
@@ -4043,6 +4077,41 @@ int mmf_dec_jpg_deinit(int ch)
 	return  mmf_vdec_deinit(ch);
 }
 #endif
+
+static int _mmf_dec_jpg_get_frame_info(uint8_t *data, uint32_t size, uint32_t *width, uint32_t *height, int *format)
+{
+	uint8_t *j_ptr = data;
+	uint32_t jpeg_w = 0;
+	uint32_t jpeg_h = 0;
+
+	if (data == NULL || size < 256 || width == NULL || height == NULL || format == NULL) {
+		printf("invalid param\n");
+		return -1;
+	}
+
+	if (j_ptr[0] == 0xFF && j_ptr[1] == 0xD8 &&
+	    j_ptr[2] == 0xFF && j_ptr[3] == 0xE0 &&
+            j_ptr[4] == 0x00 && j_ptr[5] == 0x10) {
+		j_ptr += 2;
+		while (j_ptr < data + 256) {
+			uint32_t jm_len = (j_ptr[2] << 8) | j_ptr[3];
+			if (j_ptr[0] == 0xFF && j_ptr[1] == 0xC0 && j_ptr[2] == 0x00 && j_ptr[3] == 0x11) {
+				jpeg_h = (j_ptr[5] << 8) | j_ptr[6];
+				jpeg_w = (j_ptr[7] << 8) | j_ptr[8];
+				break;
+			}
+			j_ptr += 2;
+			j_ptr += jm_len;
+		}
+	}
+
+	if (jpeg_w && jpeg_h) {
+		*width = jpeg_w;
+		*height = jpeg_h;
+	}
+
+	return 0;
+}
 
 static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 {
@@ -4085,6 +4154,7 @@ static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	priv.dec_chn_type[ch] = PT_H265;
 	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_H26X_ID;
 
+	priv.dec_chn_size_in[ch] = (SIZE_S){chn_attr->u32PicWidth, chn_attr->u32PicHeight};
 	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
 	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
 	priv.dec_chn_cfg[ch].fmt = format_out;
@@ -4158,6 +4228,7 @@ static int _mmf_dec_h264_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 	priv.dec_chn_type[ch] = PT_H264;
 	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_H26X_ID;
 
+	priv.dec_chn_size_in[ch] = (SIZE_S){chn_attr->u32PicWidth, chn_attr->u32PicHeight};
 	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
 	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
 	priv.dec_chn_cfg[ch].fmt = format_out;
@@ -4212,6 +4283,8 @@ static int mmf_vdec_deinit(int ch)
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS deinit failed with %d\n", s32Ret);
 		}
+
+		priv.dec_chn_vpss[ch] = VPSS_INVALID_GRP;
 	}
 
 	s32Ret = CVI_VDEC_StopRecvStream(ch);
@@ -4229,6 +4302,7 @@ static int mmf_vdec_deinit(int ch)
 		printf("CVI_VDEC_DestroyChn [%d] failed with %d\n", ch, s32Ret);
 	}
 
+	priv.dec_chn_size_in[ch] = (SIZE_S){0, 0};
 	priv.dec_chn_cfg[ch].w = 0;
 	priv.dec_chn_cfg[ch].h = 0;
 	priv.dec_chn_cfg[ch].fmt = 0;
@@ -4248,6 +4322,20 @@ static int _mmf_vdec_push(int ch, VDEC_STREAM_S *stStream)
 	}
 	if (priv.dec_chn_running[ch]) {
 		return s32Ret;
+	}
+
+	uint32_t stream_w = priv.dec_chn_size_in[ch].u32Width;
+	uint32_t stream_h = priv.dec_chn_size_in[ch].u32Height;
+	int stream_fmt = 0;
+	if (priv.dec_chn_type[ch] == PT_JPEG) {
+		_mmf_dec_jpg_get_frame_info(stStream->pu8Addr, stStream->u32Len, &stream_w, &stream_h, &stream_fmt);
+	}
+	if (stream_w != priv.dec_chn_size_in[ch].u32Width || stream_h != priv.dec_chn_size_in[ch].u32Height)
+	{
+		s32Ret = mmf_rst_vdec_channel(ch, &priv.dec_chn_cfg[ch], (SIZE_S){stream_w, stream_h});
+		if (s32Ret != CVI_SUCCESS) {
+			return s32Ret;
+		}
 	}
 
 	s32Ret = CVI_VDEC_SendStream(out_ch, stStream, 1000);
@@ -4498,7 +4586,7 @@ int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
 	return 0;
 }
 
-static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
+static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr, SIZE_S size_in)
 {
 	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		printf("%s: channel %d is out of range.\n", __func__, ch);
@@ -4514,7 +4602,7 @@ static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_at
 	if (chn_attr->enType == PT_H264)
 		return _mmf_dec_h264_init(ch, format_out, chn_attr);
 	if (chn_attr->enType == PT_JPEG)
-		return _mmf_dec_jpg_init(ch, format_out, chn_attr);
+		return _mmf_dec_jpg_init(ch, format_out, chn_attr, size_in);
 
 	printf("%s: type %d not supported.\n", __func__, chn_attr->enType);
 	return -1;
@@ -4543,7 +4631,7 @@ int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg)
 			vdec_chn_attr.enType, cfg->w, cfg->h,
 			(PIXEL_FORMAT_E)cfg->fmt, DATA_BITWIDTH_8, COMPRESS_MODE_NONE);
 
-	return _mmf_add_vdec_channel(ch, cfg->fmt, &vdec_chn_attr);
+	return _mmf_add_vdec_channel(ch, cfg->fmt, &vdec_chn_attr, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h});
 }
 
 int mmf_del_vdec_channel(int ch)
@@ -4557,6 +4645,38 @@ int mmf_del_vdec_channel_all()
 		mmf_del_vdec_channel(i);
 
 	return 0;
+}
+
+static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in)
+{
+	int format_out;
+	VDEC_CHN_ATTR_S vdec_chn_attr;
+
+	if (!cfg) {
+		printf("%s: cfg is not set.\n", __func__);
+		return -1;
+	}
+
+	format_out = cfg->fmt;
+	memset(&vdec_chn_attr, 0, sizeof(VDEC_CHN_ATTR_S));
+	vdec_chn_attr.enType = PT_JPEG;
+	if (cfg->type == 1)
+		vdec_chn_attr.enType = PT_H265;
+	if (cfg->type == 2)
+		vdec_chn_attr.enType = PT_H264;
+	vdec_chn_attr.enMode = VIDEO_MODE_FRAME;
+	vdec_chn_attr.u32PicWidth = cfg->w;
+	vdec_chn_attr.u32PicHeight = cfg->h;
+	vdec_chn_attr.u32FrameBufCnt = cfg->buffer_num;
+	vdec_chn_attr.u32FrameBufSize = VDEC_GetPicBufferSize(
+			vdec_chn_attr.enType, cfg->w, cfg->h,
+			(PIXEL_FORMAT_E)cfg->fmt, DATA_BITWIDTH_8, COMPRESS_MODE_NONE);
+
+	if (0 != mmf_vdec_deinit(ch)) {
+		return -1;
+	}
+
+	return _mmf_add_vdec_channel(ch, format_out, &vdec_chn_attr, size_in);
 }
 
 int mmf_invert_format_to_maix(int mmf_format) {
@@ -5266,8 +5386,13 @@ int mmf_add_vdec_channel0(uint32_t param, ...)
 	va_end(ap);
 
 	UNUSED(pool_num);
-	if (n_args > 3)
-		return _mmf_add_vdec_channel(ch, format_out, (VDEC_CHN_ATTR_S *)cfg);
+	if (!cfg) {
+		return -1;
+	}
+	if (n_args > 3) {
+		VDEC_CHN_ATTR_S *chn_attr = (VDEC_CHN_ATTR_S *)cfg;
+		return _mmf_add_vdec_channel(ch, format_out, chn_attr, (SIZE_S){chn_attr->u32PicWidth, chn_attr->u32PicHeight});
+	}
 	return mmf_add_vdec_channel(ch, (mmf_vdec_cfg_t *)cfg);
 }
 
