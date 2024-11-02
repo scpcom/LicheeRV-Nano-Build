@@ -3967,8 +3967,7 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 			return s32Ret;
 		}
 
-#if 0
-		s32Ret = SAMPLE_COMM_VPSS_Bind_VDEC(out_grp, ch, ch);
+		s32Ret = SAMPLE_COMM_VDEC_Bind_VPSS(ch, out_grp);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS bind VDEC failed with %#x\n", s32Ret);
 			_mmf_vpss_deinit(out_grp, ch);
@@ -3976,7 +3975,6 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 			CVI_VDEC_DestroyChn(ch);
 			return s32Ret;
 		}
-#endif
 
 		priv.dec_chn_vpss[ch] = out_grp;
 		break;
@@ -4205,12 +4203,10 @@ static int mmf_vdec_deinit(int ch)
 	if (priv.dec_chn_vpss[ch] != VPSS_INVALID_GRP) {
 		VPSS_GRP out_grp = priv.dec_chn_vpss[ch];
 
-#if 0
-		s32Ret = SAMPLE_COMM_VPSS_UnBind_VDEC(out_grp, ch, ch);
+		s32Ret = SAMPLE_COMM_VDEC_UnBind_VPSS(ch, out_grp);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS unbind VDEC failed with %d\n", s32Ret);
 		}
-#endif
 
 		s32Ret = _mmf_vpss_deinit(out_grp, ch);
 		if (s32Ret != CVI_SUCCESS) {
@@ -4294,7 +4290,6 @@ int mmf_vdec_push(int ch, uint8_t *data, int size, uint8_t is_start, uint8_t is_
 static int _mmf_vdec_pop(int ch, VIDEO_FRAME_INFO_S *frame)
 {
 	VPSS_GRP out_grp = 0;
-	VIDEO_FRAME_INFO_S stVdecFrame;
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
@@ -4338,25 +4333,8 @@ static int _mmf_vdec_pop(int ch, VIDEO_FRAME_INFO_S *frame)
 
 	if (priv.dec_chn_vpss[ch] != VPSS_INVALID_GRP) {
 		out_grp = priv.dec_chn_vpss[ch];
-		memset(&stVdecFrame, 0, sizeof(stVdecFrame));
-
-		s32Ret = CVI_VDEC_GetFrame(ch, &stVdecFrame, priv.dec_pop_timeout);
-		if  (s32Ret != CVI_SUCCESS) {
-				printf("%s: CVI_VDEC_GetFrame falied.\n", __func__);
-			return -1;
-		}
-
-		//set_vpss_AspectRatio(i, out_grp, ch, &pstVdecChn->stDispRect);
-		s32Ret = CVI_VPSS_SendFrame(out_grp, &stVdecFrame, 1000);
-
-		if (s32Ret != CVI_SUCCESS) {
-			CVI_VDEC_ReleaseFrame(ch, &stVdecFrame);
-				printf("%s: CVI_VPSS_SendFrame falied.\n", __func__);
-			return -1;
-		}
 
 		s32Ret = CVI_VPSS_GetChnFrame(out_grp, ch, frame, 1000);
-		CVI_VDEC_ReleaseFrame(ch, &stVdecFrame);
 		if (s32Ret != CVI_SUCCESS) {
 			CVI_TRACE_LOG(CVI_DBG_ERR, "CVI_VPSS_GetChnFrame fail, grp:%d\n", out_grp);
 			return -1;
