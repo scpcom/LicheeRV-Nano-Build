@@ -69,9 +69,8 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_VB_USER_ID			2
 #define MMF_VB_ENC_H26X_ID		3
 #define MMF_VB_ENC_JPEG_ID		4
-// TODO: re-organize buffer pools
-#define MMF_VB_DEC_H26X_ID		MMF_VB_ENC_JPEG_ID
-#define MMF_VB_DEC_JPEG_ID		MMF_VB_ENC_H26X_ID
+#define MMF_VB_DEC_H26X_ID		5
+#define MMF_VB_DEC_JPEG_ID		6
 
 #if VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN
 #error "VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN"
@@ -155,6 +154,8 @@ typedef struct {
 typedef struct {
 	int enc_h26x_enable : 1;
 	int enc_jpg_enable : 1;
+	int dec_h26x_enable : 1;
+	int dec_jpg_enable : 1;
 	bool vi_hmirror[MMF_VI_MAX_CHN];
 	bool vi_vflip[MMF_VI_MAX_CHN];
 	bool vo_video_hmirror[MMF_VO_VIDEO_MAX_CHN];
@@ -207,6 +208,22 @@ static void priv_param_init(void)
 		priv.vb_conf.astCommPool[MMF_VB_ENC_JPEG_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
 		priv.vb_conf.astCommPool[MMF_VB_ENC_JPEG_ID].u32BlkCnt = 1;
 		priv.vb_conf.astCommPool[MMF_VB_ENC_JPEG_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.u32MaxPoolCnt ++;
+	}
+
+	g_priv.dec_h26x_enable = 1;
+	if (g_priv.dec_h26x_enable) {
+		priv.vb_conf.astCommPool[MMF_VB_DEC_H26X_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
+		priv.vb_conf.astCommPool[MMF_VB_DEC_H26X_ID].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[MMF_VB_DEC_H26X_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.u32MaxPoolCnt ++;
+	}
+
+	g_priv.dec_jpg_enable = 1;
+	if (g_priv.dec_jpg_enable) {
+		priv.vb_conf.astCommPool[MMF_VB_DEC_JPEG_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
+		priv.vb_conf.astCommPool[MMF_VB_DEC_JPEG_ID].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[MMF_VB_DEC_JPEG_ID].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
 	}
 
@@ -685,6 +702,7 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 {
 	VB_CONFIG_S stVbConf;
 	CVI_U32 u32BlkSize, u32BlkRotSize;
+	CVI_U32 u32TotalSize;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	COMPRESS_MODE_E enCompressMode   = COMPRESS_MODE_NONE;
 
@@ -729,6 +747,11 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 	}
 }
 #endif
+	u32TotalSize = 0;
+	for (CVI_U32 i = 0; i < stVbConf.u32MaxPoolCnt; ++i) {
+		u32TotalSize += stVbConf.astCommPool[i].u32BlkSize * stVbConf.astCommPool[i].u32BlkCnt;
+	}
+	printf("common pools total size: %u KiB\n", u32TotalSize / 1024);
 
 	s32Ret = SAMPLE_COMM_SYS_Init(&stVbConf);
 	if (s32Ret != CVI_SUCCESS) {
