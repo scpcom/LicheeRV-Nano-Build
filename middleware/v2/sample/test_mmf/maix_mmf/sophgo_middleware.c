@@ -1393,6 +1393,24 @@ static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 heigh
 	return _mmf_vpss_init_new_with_fps(VpssGrp, width, height, format, 60);
 }
 
+static CVI_S32 _mmf_vi_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format, int fps)
+{
+	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (priv.vi_is_inited) {
+		return s32Ret;
+	}
+
+	s32Ret = _mmf_vpss_init_new_with_fps(0, width, height, format, fps);
+	if (s32Ret != CVI_SUCCESS) {
+		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
+		return s32Ret;
+	}
+
+	priv.vi_is_inited = true;
+
+	return s32Ret;
+}
+
 int mmf_vi_init2(mmf_vi_cfg_t *vi_info)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -1404,28 +1422,14 @@ int mmf_vi_init2(mmf_vi_cfg_t *vi_info)
 	priv.vi_size.u32Width = vi_info->w;
 	priv.vi_size.u32Height = vi_info->h;
 
-	s32Ret = _mmf_vpss_init_new_with_fps(0, priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format, vi_info->fps);
-
-	priv.vi_is_inited = true;
+	s32Ret = _mmf_vi_init(priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format, vi_info->fps);
 
 	return s32Ret;
 }
 
 int mmf_vi_init(void)
 {
-	if (priv.vi_is_inited) {
-		return 0;
-	}
-
-	CVI_S32 s32Ret = CVI_SUCCESS;
-	s32Ret = _mmf_vpss_init_new(0, priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
-	}
-
-	priv.vi_is_inited = true;
-
-	return s32Ret;
+	return _mmf_vi_init(priv.vi_size.u32Width, priv.vi_size.u32Height, priv.vi_vpss_format, 60);
 }
 
 int mmf_vi_deinit(void)
@@ -5168,19 +5172,16 @@ int mmf_vi_init0(uint32_t param, ...)
 	va_end(ap);
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
+	if (priv.vi_is_inited) {
+		return s32Ret;
+	}
+
 	priv.vi_format = (PIXEL_FORMAT_E)vi_format;
 	priv.vi_size.u32Width = width;
 	priv.vi_size.u32Height = height;
 	UNUSED(pool_num);
 	UNUSED(vi_cfg);
-	s32Ret = _mmf_vpss_init_new_with_fps(0, priv.vi_size.u32Width, priv.vi_size.u32Height, (PIXEL_FORMAT_E)vpss_format, fps);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
-	}
-
-	priv.vi_is_inited = true;
-
-	return s32Ret;
+	return _mmf_vi_init(priv.vi_size.u32Width, priv.vi_size.u32Height, (PIXEL_FORMAT_E)vpss_format, fps);
 }
 
 int mmf_add_vi_channel0(uint32_t param, ...)
