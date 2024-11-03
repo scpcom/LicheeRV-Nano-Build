@@ -77,28 +77,29 @@ extern int ionFree(struct sys_ion_data *para);
 #endif
 typedef struct {
 	int mmf_used_cnt;
+
 	PIXEL_FORMAT_E vi_format;
 	PIXEL_FORMAT_E vi_vpss_format;
 	int vi_pop_timeout;
-	int vo_rotate;	// 90, 180, 270
 	bool vi_is_inited;
 	bool vi_chn_is_inited[MMF_VI_MAX_CHN];
+	SIZE_S vi_size;
+	VIDEO_FRAME_INFO_S vi_frame[MMF_VI_MAX_CHN];
+
+	int vo_rotate;	// 90, 180, 270
 	bool vo_video_chn_is_inited[MMF_VO_VIDEO_MAX_CHN];
 	bool vo_osd_chn_is_inited[MMF_VO_OSD_MAX_CHN];
-	SIZE_S vi_size;
 	SIZE_S vo_vpss_in_size[MMF_VO_VIDEO_MAX_CHN];
 	SIZE_S vo_vpss_out_size[MMF_VO_VIDEO_MAX_CHN];
 	int vo_vpss_out_fps[MMF_VO_VIDEO_MAX_CHN];
 	int vo_vpss_out_depth[MMF_VO_VIDEO_MAX_CHN];
 	int vo_vpss_in_format[MMF_VO_VIDEO_MAX_CHN];
 	int vo_vpss_fit[MMF_VO_VIDEO_MAX_CHN];
-	VIDEO_FRAME_INFO_S vi_frame[MMF_VI_MAX_CHN];
 	VIDEO_FRAME_INFO_S *vo_video_pre_frame[MMF_VO_VIDEO_MAX_CHN];
 	int vo_video_pre_frame_width[MMF_VO_VIDEO_MAX_CHN];
 	int vo_video_pre_frame_height[MMF_VO_VIDEO_MAX_CHN];
 	int vo_video_pre_frame_format[MMF_VO_VIDEO_MAX_CHN];
 	SAMPLE_VO_CONFIG_S vo_video_cfg[MMF_VO_VIDEO_MAX_CHN];
-	VB_CONFIG_S vb_conf;
 
 	int ive_is_init;
 	IVE_HANDLE ive_handle;
@@ -139,6 +140,7 @@ typedef struct {
 	SIZE_S dec_chn_size_in[MMF_DEC_MAX_CHN];
 	mmf_vdec_cfg_t dec_chn_cfg[MMF_DEC_MAX_CHN];
 
+	VB_CONFIG_S vb_conf;
 	int vb_of_vi_is_config : 1;
 	int vb_of_vo_is_config : 1;
 	int vb_of_private_is_config : 1;
