@@ -122,7 +122,7 @@ typedef struct {
 	int rgn_canvas_h[MMF_RGN_MAX_NUM];
 	int rgn_canvas_format[MMF_RGN_MAX_NUM];
 
-	int enc_chn_type[MMF_ENC_MAX_CHN];
+	PAYLOAD_TYPE_E enc_chn_type[MMF_ENC_MAX_CHN];
 	int enc_chn_vb_id[MMF_ENC_MAX_CHN];
 	int enc_chn_vpss[MMF_ENC_MAX_CHN];
 	int enc_chn_is_init[MMF_ENC_MAX_CHN];
@@ -132,7 +132,7 @@ typedef struct {
 	mmf_venc_cfg_t enc_chn_cfg[MMF_ENC_MAX_CHN];
 
 	int dec_pop_timeout;
-	int dec_chn_type[MMF_DEC_MAX_CHN];
+	PAYLOAD_TYPE_E dec_chn_type[MMF_DEC_MAX_CHN];
 	int dec_chn_vb_id[MMF_DEC_MAX_CHN];
 	int dec_chn_vpss[MMF_DEC_MAX_CHN];
 	int dec_chn_is_init[MMF_DEC_MAX_CHN];
@@ -2925,6 +2925,38 @@ int mmf_region_frame_push(int ch, void *data, int len)
 	return s32Ret;
 }
 
+static int mmf_invert_codec_to_maix(PAYLOAD_TYPE_E mmf_codec) {
+	switch (mmf_codec) {
+		case PT_JPEG:
+			return 0;
+		case PT_H265:
+			return 1;
+		case PT_H264:
+			return 2;
+		case PT_MJPEG:
+			return 4;
+		default:
+			return 0xFF;
+	}
+}
+
+static PAYLOAD_TYPE_E mmf_invert_codec_to_mmf(int maix_codec) {
+	switch (maix_codec) {
+		case 0:
+			return PT_JPEG;
+		case 1:
+			return PT_H265;
+		case 2:
+			return PT_H264;
+		case 3:
+			return PT_JPEG;
+		case 4:
+			return PT_MJPEG;
+		default:
+			return PT_BUTT;
+	}
+}
+
 static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 {
 	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
@@ -3897,11 +3929,12 @@ int mmf_add_venc_channel(int ch, mmf_venc_cfg_t *cfg)
 		printf("%s: cfg is not set.\n", __func__);
 		return -1;
 	}
-	if (cfg->type == 1)
+	if (mmf_invert_codec_to_mmf(cfg->type) == PT_H265)
 		return _mmf_enc_h265_init(ch, cfg);
-	if (cfg->type == 2)
+	if (mmf_invert_codec_to_mmf(cfg->type) == PT_H264)
 		return _mmf_enc_h264_init(ch, cfg);
-	if (cfg->type == 4)
+	if (mmf_invert_codec_to_mmf(cfg->type) == PT_JPEG ||
+	    mmf_invert_codec_to_mmf(cfg->type) == PT_MJPEG)
 		return _mmf_enc_jpg_init(ch, cfg);
 
 	printf("%s: type %d not supported.\n", __func__, cfg->type);
@@ -4084,6 +4117,7 @@ static int _mmf_vdec_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_out,
 	priv.dec_chn_vb_id[ch] = vb_id;
 
 	priv.dec_chn_size_in[ch] = (SIZE_S){w_in, h_in};
+	priv.dec_chn_cfg[ch].type = mmf_invert_codec_to_maix(priv.dec_chn_type[ch]);
 	priv.dec_chn_cfg[ch].w = w_out;
 	priv.dec_chn_cfg[ch].h = h_out;
 	priv.dec_chn_cfg[ch].fmt = format_out;
@@ -4571,11 +4605,7 @@ int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg)
 	}
 
 	memset(&vdec_chn_attr, 0, sizeof(VDEC_CHN_ATTR_S));
-	vdec_chn_attr.enType = PT_JPEG;
-	if (cfg->type == 1)
-		vdec_chn_attr.enType = PT_H265;
-	if (cfg->type == 2)
-		vdec_chn_attr.enType = PT_H264;
+	vdec_chn_attr.enType = mmf_invert_codec_to_mmf(cfg->type);
 	vdec_chn_attr.enMode = VIDEO_MODE_FRAME;
 	vdec_chn_attr.u32PicWidth = cfg->w;
 	vdec_chn_attr.u32PicHeight = cfg->h;
@@ -4612,11 +4642,7 @@ static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in)
 
 	format_out = cfg->fmt;
 	memset(&vdec_chn_attr, 0, sizeof(VDEC_CHN_ATTR_S));
-	vdec_chn_attr.enType = PT_JPEG;
-	if (cfg->type == 1)
-		vdec_chn_attr.enType = PT_H265;
-	if (cfg->type == 2)
-		vdec_chn_attr.enType = PT_H264;
+	vdec_chn_attr.enType = mmf_invert_codec_to_mmf(cfg->type);
 	vdec_chn_attr.enMode = VIDEO_MODE_FRAME;
 	vdec_chn_attr.u32PicWidth = cfg->w;
 	vdec_chn_attr.u32PicHeight = cfg->h;
