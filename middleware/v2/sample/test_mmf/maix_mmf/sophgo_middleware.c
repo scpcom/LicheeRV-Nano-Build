@@ -1462,7 +1462,7 @@ static int _mmf_add_vi_channel(int ch, int width, int height, int format, int fp
 	}
 
 	if ((format == PIXEL_FORMAT_RGB_888 && width * height * 3 > 640 * 480 * 3)
-		|| (format == PIXEL_FORMAT_RGB_888 && width * height * 3 / 2 > 2560 * 1440 * 3 / 2)) {
+		|| (format == PIXEL_FORMAT_NV21 && width * height * 3 / 2 > 2560 * 1440 * 3 / 2)) {
 		printf("image size is too large, for NV21, maximum resolution 2560x1440, for RGB888, maximum resolution 640x480!\n");
 		return -1;
 	}
@@ -1696,7 +1696,7 @@ void mmf_vi_frame_free(int ch) {
 		frame->stVFrame.pu8VirAddr[0] = NULL;
 	}
 	if (CVI_VPSS_ReleaseChnFrame(0, ch, frame) != 0)
-			printf("CVI_VI_ReleaseChnFrame NG\n");
+			printf("CVI_VI_ReleaseChnFrame failed\n");
 }
 
 // manage vo channels
@@ -1838,7 +1838,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 
 		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_deinit_vpss_chn;
 		}
 
@@ -1865,7 +1865,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 // error_and_unbind:
 // 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 // 		if (s32Ret != CVI_SUCCESS) {
-// 			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+// 			printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 // 		}
 error_and_deinit_vpss:
 		s32Ret = _mmf_vpss_deinit_new(1);
@@ -1880,7 +1880,7 @@ error_and_deinit_vpss_chn:
 error_and_stop_vo:
 		s32Ret = SAMPLE_COMM_VO_StopVO(&stVoConfig);
 		if (s32Ret != CVI_SUCCESS) {
-			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vo stop failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 		return -1;
 #else
@@ -1902,7 +1902,7 @@ error_and_stop_vo:
 
 		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_deinit_vpss;
 		}
 
@@ -1929,12 +1929,12 @@ error_and_stop_vo:
 error_and_stop_vo:
 		s32Ret = SAMPLE_COMM_VO_StopVO(&stVoConfig);
 		if (s32Ret != CVI_SUCCESS) {
-			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vo stop failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_unbind:
 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
-			printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+			printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_deinit_vpss:
 		s32Ret = _mmf_vpss_deinit(1, ch);
@@ -2002,7 +2002,7 @@ int mmf_del_vo_channel(int layer, int ch) {
 		}
 
 		if (CVI_SUCCESS != SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch)) {
-			printf("vi unbind vpss failed.!\n");
+			printf("vo unbind vpss failed.!\n");
 		}
 #if 0
 		if (0 != _mmf_vpss_deinit(1, ch)) {
@@ -2140,7 +2140,7 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 			int flip_out = !g_priv.vo_video_vflip[ch];
 			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
@@ -2170,7 +2170,7 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 
 			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 		}
@@ -2239,7 +2239,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			int flip_out = !g_priv.vo_video_vflip[ch];
 			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
@@ -2269,13 +2269,13 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 
 			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 #else
 			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
@@ -2306,7 +2306,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			// 						stSizeIn.u32Width, stSizeIn.u32Height, stSizeOut.u32Width, stSizeOut.u32Height, formatOut);
 			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
-				printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
+				printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				_mmf_vpss_deinit(1, ch);
 				return -1;
 			}
@@ -2897,7 +2897,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	if ((cfg->fmt == PIXEL_FORMAT_RGB_888 && cfg->w * cfg->h * 3 > 640 * 480 * 3)
-		|| (cfg->fmt == PIXEL_FORMAT_RGB_888 && cfg->w * cfg->h * 3 / 2 > 2560 * 1440 * 3 / 2)) {
+		|| (cfg->fmt == PIXEL_FORMAT_NV21 && cfg->w * cfg->h * 3 / 2 > 2560 * 1440 * 3 / 2)) {
 		printf("image size is too large, for NV21, maximum resolution 2560x1440, for RGB888, maximum resolution 640x480!\n");
 		return -1;
 	}
@@ -2924,7 +2924,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 
 	s32Ret = CVI_VENC_ResetChn(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
+		printf("CVI_VENC_ResetChn [%d] failed with %#x\n", ch, s32Ret);
 		return s32Ret;
 	}
 
@@ -2989,7 +2989,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	stRecvParam.s32RecvPicNum = -1;
 	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_StartRecvPic failed with %#x\n", s32Ret);
+		printf("CVI_VENC_StartRecvFrame failed with %#x\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -3128,7 +3128,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	stRecvParam.s32RecvPicNum = -1;
 	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_StartRecvPic failed with %d\n", s32Ret);
+		printf("CVI_VENC_StartRecvFrame failed with %d\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -3319,7 +3319,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 	stRecvParam.s32RecvPicNum = -1;
 	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_StartRecvPic failed with %d\n", s32Ret);
+		printf("CVI_VENC_StartRecvFrame failed with %d\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -3500,7 +3500,7 @@ static int mmf_venc_deinit(int ch)
 
 	s32Ret = CVI_VENC_StopRecvFrame(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VENC_StopRecvPic failed with %d\n", s32Ret);
+		printf("CVI_VENC_StopRecvFrame failed with %d\n", s32Ret);
 	}
 
 	s32Ret = CVI_VENC_ResetChn(ch);
@@ -3946,7 +3946,7 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_o
 
 	s32Ret = CVI_VDEC_ResetChn(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
+		printf("CVI_VDEC_ResetChn [%d] failed with %#x\n", ch, s32Ret);
 		goto out_chn_attr;
 	}
 
@@ -4027,7 +4027,7 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_o
 
 	s32Ret = CVI_VDEC_StartRecvStream(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_StartRecvPic failed with %#x\n", s32Ret);
+		printf("CVI_VDEC_StartRecvStream failed with %#x\n", s32Ret);
 		s32Ret = CVI_FAILURE;
 		goto out_vpss;
 	}
@@ -4147,7 +4147,7 @@ static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 
 	s32Ret = CVI_VDEC_StartRecvStream(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_StartRecvPic failed with %d\n", s32Ret);
+		printf("CVI_VDEC_StartRecvStream failed with %d\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -4221,7 +4221,7 @@ static int _mmf_dec_h264_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
 
 	s32Ret = CVI_VDEC_StartRecvStream(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_StartRecvPic failed with %d\n", s32Ret);
+		printf("CVI_VDEC_StartRecvStream failed with %d\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
@@ -4289,7 +4289,7 @@ static int mmf_vdec_deinit(int ch)
 
 	s32Ret = CVI_VDEC_StopRecvStream(ch);
 	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_StopRecvPic failed with %d\n", s32Ret);
+		printf("CVI_VDEC_StopRecvStream failed with %d\n", s32Ret);
 	}
 
 	s32Ret = CVI_VDEC_ResetChn(ch);
@@ -4424,7 +4424,7 @@ static int _mmf_vdec_pop(int ch, VIDEO_FRAME_INFO_S *frame)
 
 		s32Ret = CVI_VPSS_GetChnFrame(out_grp, ch, frame, 1000);
 		if (s32Ret != CVI_SUCCESS) {
-			CVI_TRACE_LOG(CVI_DBG_ERR, "CVI_VPSS_GetChnFrame fail, grp:%d\n", out_grp);
+			printf("CVI_VPSS_GetChnFrame failed, grp:%d\n", out_grp);
 			return -1;
 		}
 
@@ -4446,6 +4446,10 @@ static int _mmf_vdec_pop(int ch, VIDEO_FRAME_INFO_S *frame)
 
 	} else {
 		s32Ret = CVI_VDEC_GetFrame(ch, frame, priv.dec_pop_timeout);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("CVI_VDEC_GetFrame failed\n");
+			return -1;
+		}
 
 		// map already done by CVI_VDEC_GetFrame
 	}
@@ -4531,7 +4535,7 @@ int mmf_vdec_free(int ch)
 	}
 
 	if (s32Ret != 0) {
-		printf("CVI_VDEC_ReleaseFrame NG\n");
+		printf("CVI_VDEC_ReleaseFrame failed\n");
 		return -1;
 	}
 
