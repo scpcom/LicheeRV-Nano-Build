@@ -187,7 +187,9 @@ static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in);
 static void priv_param_init(void)
 {
 	priv.vi_pop_timeout = 100;
+	priv.vi_vpss = VPSS_INVALID_GRP;
 	priv.vo_rotate = 90;
+	priv.vo_vpss = VPSS_INVALID_GRP;
 	priv.dec_pop_timeout = 1000;
 
 	priv.vb_conf.u32MaxPoolCnt = 1;
@@ -1392,19 +1394,21 @@ static CVI_S32 _mmf_vpss_init_new_with_fps(VPSS_GRP VpssGrp, CVI_U32 width, CVI_
 
 static CVI_S32 _mmf_vi_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format, int fps)
 {
+	VPSS_GRP out_grp;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	if (priv.vi_is_inited) {
 		return s32Ret;
 	}
 
-	priv.vi_vpss = 0;
+	out_grp = CVI_VPSS_GetAvailableGrp();
 
-	s32Ret = _mmf_vpss_init_new_with_fps(priv.vi_vpss, width, height, format, fps);
+	s32Ret = _mmf_vpss_init_new_with_fps(out_grp, width, height, format, fps);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 		return s32Ret;
 	}
 
+	priv.vi_vpss = out_grp;
 	priv.vi_is_inited = true;
 
 	return s32Ret;
@@ -1438,12 +1442,15 @@ int mmf_vi_deinit(void)
 	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	s32Ret = _mmf_vpss_deinit_new(priv.vi_vpss);
+	if (priv.vi_vpss != VPSS_INVALID_GRP) {
+		s32Ret = _mmf_vpss_deinit_new(priv.vi_vpss);
+	}
 	if (s32Ret != CVI_SUCCESS) {
 		printf("_mmf_vpss_deinit_new failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
+	priv.vi_vpss = VPSS_INVALID_GRP;
 	priv.vi_is_inited = false;
 
 	return s32Ret;
@@ -1726,14 +1733,33 @@ int mmf_get_vo_unused_channel(int layer) {
 
 static CVI_S32 _mmf_vo_vpss_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
 {
-	priv.vo_vpss = 1;
+	VPSS_GRP out_grp = CVI_VPSS_GetAvailableGrp();
+	CVI_S32 s32Ret = CVI_SUCCESS;
 
-	return _mmf_vpss_init_new_with_fps(priv.vo_vpss, width, height, format, 60);
+	s32Ret = _mmf_vpss_init_new_with_fps(out_grp, width, height, format, 60);
+	if (s32Ret != CVI_SUCCESS) {
+		return s32Ret;
+	}
+
+	priv.vo_vpss = out_grp;
+
+	return s32Ret;
 }
 
 static CVI_S32 _mmf_vo_vpss_deinit(void)
 {
-	return _mmf_vpss_deinit_new(priv.vo_vpss);
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	if (priv.vo_vpss != VPSS_INVALID_GRP) {
+		s32Ret = _mmf_vpss_deinit_new(priv.vo_vpss);
+	}
+	if (s32Ret != CVI_SUCCESS) {
+		return s32Ret;
+	}
+
+	priv.vo_vpss = VPSS_INVALID_GRP;
+
+	return s32Ret;
 }
 
 // fit = 0, width to new width, height to new height, may be stretch
