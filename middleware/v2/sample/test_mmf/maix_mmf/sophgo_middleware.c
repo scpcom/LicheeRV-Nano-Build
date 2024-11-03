@@ -1388,11 +1388,6 @@ static CVI_S32 _mmf_vpss_init_new_with_fps(VPSS_GRP VpssGrp, CVI_U32 width, CVI_
 	return s32Ret;
 }
 
-static CVI_S32 _mmf_vpss_init_new(VPSS_GRP VpssGrp, CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
-{
-	return _mmf_vpss_init_new_with_fps(VpssGrp, width, height, format, 60);
-}
-
 static CVI_S32 _mmf_vi_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format, int fps)
 {
 	CVI_S32 s32Ret = CVI_SUCCESS;
@@ -1725,6 +1720,16 @@ int mmf_get_vo_unused_channel(int layer) {
 	return -1;
 }
 
+static CVI_S32 _mmf_vo_vpss_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
+{
+	return _mmf_vpss_init_new_with_fps(1, width, height, format, 60);
+}
+
+static CVI_S32 _mmf_vo_vpss_deinit(void)
+{
+	return _mmf_vpss_deinit_new(1);
+}
+
 // fit = 0, width to new width, height to new height, may be stretch
 // fit = 1, keep aspect ratio, fill blank area with black color
 // fit = 2, keep aspect ratio, crop image to fit new size
@@ -1818,13 +1823,13 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 		priv.vo_vpss_out_size[ch].u32Height = stSizeOut.u32Height;
 		priv.vo_vpss_fit[ch] = fit;
 #if 1
-		s32Ret = _mmf_vpss_deinit_new(1);
+		s32Ret = _mmf_vo_vpss_deinit();
 		if (s32Ret != CVI_SUCCESS) {
 			printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_stop_vo;
 		}
 
-		s32Ret = _mmf_vpss_init_new(1, stSizeIn.u32Width, stSizeIn.u32Height, formatIn);
+		s32Ret = _mmf_vo_vpss_init(stSizeIn.u32Width, stSizeIn.u32Height, formatIn);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_stop_vo;
@@ -1874,7 +1879,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 // 			printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 // 		}
 error_and_deinit_vpss:
-		s32Ret = _mmf_vpss_deinit_new(1);
+		s32Ret = _mmf_vo_vpss_deinit();
 		if (s32Ret != CVI_SUCCESS) {
 			printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 		}
@@ -2019,7 +2024,7 @@ int mmf_del_vo_channel(int layer, int ch) {
 			printf("_mmf_vpss_chn_deinit failed!\n");
 		}
 
-		if (0 != _mmf_vpss_deinit_new(1)) {
+		if (0 != _mmf_vo_vpss_deinit()) {
 			printf("_mmf_vpss_deinit_new failed!\n");
 		}
 #endif
@@ -2150,13 +2155,13 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_deinit_new(1);
+			s32Ret = _mmf_vo_vpss_deinit();
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_init_new(1, width, height, (PIXEL_FORMAT_E)format);
+			s32Ret = _mmf_vo_vpss_init(width, height, (PIXEL_FORMAT_E)format);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
@@ -2249,13 +2254,13 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_deinit_new(1);
+			s32Ret = _mmf_vo_vpss_deinit();
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_init_new(1, width, height, (PIXEL_FORMAT_E)format);
+			s32Ret = _mmf_vo_vpss_init(width, height, (PIXEL_FORMAT_E)format);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
