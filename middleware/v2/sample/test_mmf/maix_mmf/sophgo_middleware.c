@@ -124,6 +124,7 @@ typedef struct {
 
 	int enc_chn_type[MMF_ENC_MAX_CHN];
 	int enc_chn_vb_id[MMF_ENC_MAX_CHN];
+	int enc_chn_vpss[MMF_ENC_MAX_CHN];
 	int enc_chn_is_init[MMF_ENC_MAX_CHN];
 	int enc_chn_running[MMF_ENC_MAX_CHN];
 	VIDEO_FRAME_INFO_S *enc_chn_frame[MMF_ENC_MAX_CHN];
@@ -2926,8 +2927,6 @@ int mmf_region_frame_push(int ch, void *data, int len)
 
 static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 {
-	VPSS_GRP out_grp = 0;
-
 	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
 	}
@@ -2988,45 +2987,42 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	s32Ret = CVI_VENC_GetJpegParam(ch, &stJpegParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_GetJpegParam failed with %#x\n", s32Ret);
-		CVI_VENC_DestroyChn(ch);
-		return s32Ret;
+		goto out_chn;
 	}
 	stJpegParam.u32Qfactor = cfg->jpg_quality;
 	s32Ret = CVI_VENC_SetJpegParam(ch, &stJpegParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_SetJpegParam failed with %#x\n", s32Ret);
-		CVI_VENC_DestroyChn(ch);
-		return s32Ret;
+		goto out_chn;
 	}
 
+	priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
 	switch (cfg->fmt) {
 	case PIXEL_FORMAT_RGB_888:
-		out_grp = 2;
+	{
+		VPSS_GRP out_grp = CVI_VPSS_GetAvailableGrp();
 
 		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, PIXEL_FORMAT_RGB_888, PIXEL_FORMAT_YUV_PLANAR_420, cfg->output_fps, 0, CVI_FALSE, CVI_FALSE, 0);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS init failed with %d\n", s32Ret);
-			CVI_VENC_StopRecvFrame(ch);
-			CVI_VENC_DestroyChn(ch);
-			return s32Ret;
+			goto out_chn;
 		}
+		priv.enc_chn_vpss[ch] = out_grp;
 
 		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(out_grp, ch, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS bind VENC failed with %#x\n", s32Ret);
-			_mmf_vpss_deinit(out_grp, ch);
-			CVI_VENC_StopRecvFrame(ch);
-			CVI_VENC_DestroyChn(ch);
-			return s32Ret;
+			goto out_vpss;
 		}
+
 		break;
+	}
 	case PIXEL_FORMAT_NV21:
 		break;
 	default:
 		printf("unknown format!\n");
-		CVI_VENC_StopRecvFrame(ch);
-		CVI_VENC_DestroyChn(ch);
-		return -1;
+		s32Ret = -1;
+		goto out_chn;
 	}
 
 	VENC_RECV_PIC_PARAM_S stRecvParam;
@@ -3034,7 +3030,8 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_StartRecvFrame failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
+		s32Ret = CVI_FAILURE;
+		goto out_vpss;
 	}
 
 	if (priv.enc_chn_frame[ch]) {
@@ -3053,6 +3050,15 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	priv.enc_chn_is_init[ch] = 1;
 	priv.enc_chn_running[ch] = 0;
 
+	return s32Ret;
+
+out_vpss:
+	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		_mmf_vpss_deinit(priv.enc_chn_vpss[ch], ch);
+		priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
+	}
+out_chn:
+	CVI_VENC_DestroyChn(ch);
 	return s32Ret;
 }
 
@@ -3508,7 +3514,6 @@ int mmf_enc_h264_init(int ch, int w, int h)
 
 static int mmf_venc_deinit(int ch)
 {
-	VPSS_GRP out_grp = 0;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
 		return -1;
@@ -3522,9 +3527,8 @@ static int mmf_venc_deinit(int ch)
 		mmf_venc_free(ch);
 	}
 
-	switch (priv.enc_chn_cfg[ch].fmt) {
-	case PIXEL_FORMAT_RGB_888:
-		out_grp = 2;
+	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		VPSS_GRP out_grp = priv.enc_chn_vpss[ch];
 
 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(out_grp, ch, ch);
 		if (s32Ret != CVI_SUCCESS) {
@@ -3535,11 +3539,8 @@ static int mmf_venc_deinit(int ch)
 		if (s32Ret != CVI_SUCCESS) {
 			printf("VPSS deinit failed with %d\n", s32Ret);
 		}
-		break;
-	case PIXEL_FORMAT_NV21:
-		break;
-	default:
-		break;
+
+		priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
 	}
 
 	s32Ret = CVI_VENC_StopRecvFrame(ch);
@@ -3603,14 +3604,8 @@ int mmf_venc_push2(int ch, void *frame_info)
 		priv.enc_chn_cfg[ch].fmt = format;
 	}
 
-	switch (format) {
-		case PIXEL_FORMAT_RGB_888:
-		{
-			out_ch = 2;
-		}
-		break;
-		default:
-		break;
+	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		out_ch = priv.enc_chn_vpss[ch];
 	}
 
 	s32Ret = CVI_VENC_SendFrame(out_ch, frame, 1000);
@@ -3664,8 +3659,6 @@ static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int q
 			} else {
 				memcpy(priv.enc_chn_frame[ch]->stVFrame.pu8VirAddr[0], data, w * h * 3);
 			}
-
-			out_ch = 2;
 		}
 		break;
 		case PIXEL_FORMAT_NV21:
@@ -3684,6 +3677,10 @@ static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int q
 		}
 		break;
 		default: return -1;
+	}
+
+	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		out_ch = priv.enc_chn_vpss[ch];
 	}
 
 	s32Ret = CVI_VENC_SendFrame(out_ch, priv.enc_chn_frame[ch], 1000);
