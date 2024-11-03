@@ -81,12 +81,14 @@ typedef struct {
 	PIXEL_FORMAT_E vi_format;
 	PIXEL_FORMAT_E vi_vpss_format;
 	int vi_pop_timeout;
+	int vi_vpss;
 	bool vi_is_inited;
 	bool vi_chn_is_inited[MMF_VI_MAX_CHN];
 	SIZE_S vi_size;
 	VIDEO_FRAME_INFO_S vi_frame[MMF_VI_MAX_CHN];
 
 	int vo_rotate;	// 90, 180, 270
+	int vo_vpss;
 	bool vo_video_chn_is_inited[MMF_VO_VIDEO_MAX_CHN];
 	bool vo_osd_chn_is_inited[MMF_VO_OSD_MAX_CHN];
 	SIZE_S vo_vpss_in_size[MMF_VO_VIDEO_MAX_CHN];
@@ -1395,7 +1397,9 @@ static CVI_S32 _mmf_vi_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format
 		return s32Ret;
 	}
 
-	s32Ret = _mmf_vpss_init_new_with_fps(0, width, height, format, fps);
+	priv.vi_vpss = 0;
+
+	s32Ret = _mmf_vpss_init_new_with_fps(priv.vi_vpss, width, height, format, fps);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("_mmf_vpss_init_new failed. s32Ret: 0x%x !\n", s32Ret);
 		return s32Ret;
@@ -1434,7 +1438,7 @@ int mmf_vi_deinit(void)
 	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	s32Ret = _mmf_vpss_deinit_new(0);
+	s32Ret = _mmf_vpss_deinit_new(priv.vi_vpss);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("_mmf_vpss_deinit_new failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
@@ -1486,16 +1490,16 @@ static int _mmf_add_vi_channel(int ch, int width, int height, int format, int fp
 	stSizeOut.u32Height = height;
 	bool mirror = !g_priv.vi_hmirror[ch];
 	bool flip = !g_priv.vi_vflip[ch];
-	s32Ret = _mmf_vpss_init(0, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, 2);
+	s32Ret = _mmf_vpss_init(priv.vi_vpss, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, 2);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("vpss init failed. s32Ret: 0x%x. try again..\r\n", s32Ret);
-		s32Ret = _mmf_vpss_deinit(0, ch);
+		s32Ret = _mmf_vpss_deinit(priv.vi_vpss, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 			return -1;
 		}
 
-		s32Ret = _mmf_vpss_init(0, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, 2);
+		s32Ret = _mmf_vpss_init(priv.vi_vpss, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, 2);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
 			return -1;
@@ -1505,26 +1509,26 @@ static int _mmf_add_vi_channel(int ch, int width, int height, int format, int fp
 	priv.vi_chn_is_inited[ch] = true;
 	return 0;
 _need_deinit_vpss:
-	_mmf_vpss_deinit(0, ch);
+	_mmf_vpss_deinit(priv.vi_vpss, ch);
 	return -1;
 #else
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	int width_out = ALIGN(width, DEFAULT_ALIGN);
 	int height_out = height;
 	PIXEL_FORMAT_E format_out = (PIXEL_FORMAT_E)format;
-	s32Ret = _mmf_vpss_chn_deinit(0, ch);
+	s32Ret = _mmf_vpss_chn_deinit(priv.vi_vpss, ch);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
-	s32Ret = _mmf_vpss_chn_init(0, ch, width_out, height_out, format_out, fps, depth, mirror, flip, fit);
+	s32Ret = _mmf_vpss_chn_init(priv.vi_vpss, ch, width_out, height_out, format_out, fps, depth, mirror, flip, fit);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 		return CVI_FAILURE;
 	}
 
-	s32Ret = SAMPLE_COMM_VI_Bind_VPSS(0, ch, 0);
+	s32Ret = SAMPLE_COMM_VI_Bind_VPSS(priv.vi_vpss, ch, 0);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("vi bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		goto _need_deinit_vpss_chn;
@@ -1534,7 +1538,7 @@ _need_deinit_vpss:
 
 	return 0;
 _need_deinit_vpss_chn:
-	_mmf_vpss_chn_deinit(0, ch);
+	_mmf_vpss_chn_deinit(priv.vi_vpss, ch);
 	return -1;
 #endif
 }
@@ -1555,13 +1559,13 @@ int mmf_del_vi_channel(int ch) {
 	}
 
 	CVI_S32 s32Ret = CVI_SUCCESS;
-	s32Ret = SAMPLE_COMM_VI_UnBind_VPSS(0, ch, 0);
+	s32Ret = SAMPLE_COMM_VI_UnBind_VPSS(priv.vi_vpss, ch, 0);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("vi unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		// return -1; // continue to deinit vpss
 	}
 
-	if (0 != _mmf_vpss_chn_deinit(0, ch)) {
+	if (0 != _mmf_vpss_chn_deinit(priv.vi_vpss, ch)) {
 		printf("_mmf_vpss_chn_deinit failed. s32Ret: 0x%x !\n", s32Ret);
 	}
 
@@ -1614,7 +1618,7 @@ int mmf_vi_frame_pop2(int ch, void **frame_info,  mmf_frame_info_t *frame_info_m
 
 	int ret = -1;
 	VIDEO_FRAME_INFO_S *frame = &priv.vi_frame[ch];
-	if (CVI_VPSS_GetChnFrame(0, ch, frame, priv.vi_pop_timeout) == 0) {
+	if (CVI_VPSS_GetChnFrame(priv.vi_vpss, ch, frame, priv.vi_pop_timeout) == 0) {
 		int image_size = frame->stVFrame.u32Length[0]
 			       + frame->stVFrame.u32Length[1]
 			       + frame->stVFrame.u32Length[2];
@@ -1696,7 +1700,7 @@ void mmf_vi_frame_free(int ch) {
 		CVI_SYS_Munmap(frame->stVFrame.pu8VirAddr[0], image_size);
 		frame->stVFrame.pu8VirAddr[0] = NULL;
 	}
-	if (CVI_VPSS_ReleaseChnFrame(0, ch, frame) != 0)
+	if (CVI_VPSS_ReleaseChnFrame(priv.vi_vpss, ch, frame) != 0)
 			printf("CVI_VI_ReleaseChnFrame failed\n");
 }
 
@@ -1722,12 +1726,14 @@ int mmf_get_vo_unused_channel(int layer) {
 
 static CVI_S32 _mmf_vo_vpss_init(CVI_U32 width, CVI_U32 height, PIXEL_FORMAT_E format)
 {
-	return _mmf_vpss_init_new_with_fps(1, width, height, format, 60);
+	priv.vo_vpss = 1;
+
+	return _mmf_vpss_init_new_with_fps(priv.vo_vpss, width, height, format, 60);
 }
 
 static CVI_S32 _mmf_vo_vpss_deinit(void)
 {
-	return _mmf_vpss_deinit_new(1);
+	return _mmf_vpss_deinit_new(priv.vo_vpss);
 }
 
 // fit = 0, width to new width, height to new height, may be stretch
@@ -1835,19 +1841,19 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 			goto error_and_stop_vo;
 		}
 
-		s32Ret = _mmf_vpss_chn_deinit(1, ch);
+		s32Ret = _mmf_vpss_chn_deinit(priv.vo_vpss, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 			goto error_and_deinit_vpss;
 		}
 
-		s32Ret = _mmf_vpss_chn_init(1, ch, stSizeOut.u32Width, stSizeOut.u32Height, formatOut, fps, depth, mirror, flip, fit);
+		s32Ret = _mmf_vpss_chn_init(priv.vo_vpss, ch, stSizeOut.u32Width, stSizeOut.u32Height, formatOut, fps, depth, mirror, flip, fit);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 			goto error_and_deinit_vpss;
 		}
 
-		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
+		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(priv.vo_vpss, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_deinit_vpss_chn;
@@ -1874,7 +1880,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 
 		return s32Ret;
 // error_and_unbind:
-// 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
+// 		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(priv.vo_vpss, ch, layer, ch);
 // 		if (s32Ret != CVI_SUCCESS) {
 // 			printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 // 		}
@@ -1884,7 +1890,7 @@ error_and_deinit_vpss:
 			printf("_mmf_vpss_deinit_new failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_deinit_vpss_chn:
-		s32Ret = _mmf_vpss_chn_deinit(1, ch);
+		s32Ret = _mmf_vpss_chn_deinit(priv.vo_vpss, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 		}
@@ -1895,23 +1901,24 @@ error_and_stop_vo:
 		}
 		return -1;
 #else
-		s32Ret = _mmf_vpss_init(1, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
+		priv.vo_vpss = 1;
+		s32Ret = _mmf_vpss_init(priv.vo_vpss, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vpss init failed. s32Ret: 0x%x. try again..\r\n", s32Ret);
-			s32Ret = _mmf_vpss_deinit(1, ch);
+			s32Ret = _mmf_vpss_deinit(priv.vo_vpss, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 				goto error_and_stop_vo;
 			}
 
-			s32Ret = _mmf_vpss_init(1, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
+			s32Ret = _mmf_vpss_init(priv.vo_vpss, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
 				goto error_and_stop_vo;
 			}
 		}
 
-		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
+		s32Ret = SAMPLE_COMM_VPSS_Bind_VO(priv.vo_vpss, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 			goto error_and_deinit_vpss;
@@ -1943,12 +1950,12 @@ error_and_stop_vo:
 			printf("vo stop failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_unbind:
-		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
+		s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(priv.vo_vpss, ch, layer, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 		}
 error_and_deinit_vpss:
-		s32Ret = _mmf_vpss_deinit(1, ch);
+		s32Ret = _mmf_vpss_deinit(priv.vo_vpss, ch);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("vpss deinit failed. s32Ret: 0x%x !\n", s32Ret);
 		}
@@ -1975,7 +1982,7 @@ error_and_deinit_vpss:
 			return -1;
 		}
 
-		if (0 != mmf_add_region_channel(ch, OVERLAY_RGN, CVI_ID_VPSS, 1, ch, 0, 0, width, height, format_in)) {
+		if (0 != mmf_add_region_channel(ch, OVERLAY_RGN, CVI_ID_VPSS, priv.vo_vpss, ch, 0, 0, width, height, format_in)) {
 			printf("mmf_add_region_channel failed!\r\n");
 			return -1;
 		}
@@ -2012,15 +2019,15 @@ int mmf_del_vo_channel(int layer, int ch) {
 			return CVI_SUCCESS;
 		}
 
-		if (CVI_SUCCESS != SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch)) {
+		if (CVI_SUCCESS != SAMPLE_COMM_VPSS_UnBind_VO(priv.vo_vpss, ch, layer, ch)) {
 			printf("vo unbind vpss failed.!\n");
 		}
 #if 0
-		if (0 != _mmf_vpss_deinit(1, ch)) {
+		if (0 != _mmf_vpss_deinit(priv.vo_vpss, ch)) {
 			printf("vpss deinit failed.!\n");
 		}
 #else
-		if (0 != _mmf_vpss_chn_deinit(1, ch)) {
+		if (0 != _mmf_vpss_chn_deinit(priv.vo_vpss, ch)) {
 			printf("_mmf_vpss_chn_deinit failed!\n");
 		}
 
@@ -2149,7 +2156,7 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 			int depth_out = priv.vo_vpss_out_depth[ch];
 			int mirror_out = !g_priv.vo_video_hmirror[ch];
 			int flip_out = !g_priv.vo_video_vflip[ch];
-			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
+			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(priv.vo_vpss, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
@@ -2167,19 +2174,19 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_chn_deinit(1, ch);
+			s32Ret = _mmf_vpss_chn_deinit(priv.vo_vpss, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_chn_init(1, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
+			s32Ret = _mmf_vpss_chn_init(priv.vo_vpss, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
-			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
+			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(priv.vo_vpss, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
@@ -2192,7 +2199,7 @@ int mmf_vo_frame_push2(int layer, int ch, int fit, void *frame_info) {
 		// }
 
 		// mmf_vo_frame_push
-		s32Ret = CVI_VPSS_SendFrame(1, frame, 1000);
+		s32Ret = CVI_VPSS_SendFrame(priv.vo_vpss, frame, 1000);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VO_SendFrame failed >< with %#x\n", s32Ret);
 			return s32Ret;
@@ -2248,7 +2255,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			int depth_out = priv.vo_vpss_out_depth[ch];
 			int mirror_out = !g_priv.vo_video_hmirror[ch];
 			int flip_out = !g_priv.vo_video_vflip[ch];
-			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
+			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(priv.vo_vpss, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
@@ -2266,25 +2273,25 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_chn_deinit(1, ch);
+			s32Ret = _mmf_vpss_chn_deinit(priv.vo_vpss, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_chn_deinit failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
-			s32Ret = _mmf_vpss_chn_init(1, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
+			s32Ret = _mmf_vpss_chn_init(priv.vo_vpss, ch, width_out, height_out, PIXEL_FORMAT_NV21, fps_out, depth_out, mirror_out, flip_out, fit);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("_mmf_vpss_chn_init failed with %#x!\n", s32Ret);
 				return -1;
 			}
 
-			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
+			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(priv.vo_vpss, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
 			}
 #else
-			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(1, ch, layer, ch);
+			s32Ret = SAMPLE_COMM_VPSS_UnBind_VO(priv.vo_vpss, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vo unbind vpss failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
@@ -2302,11 +2309,11 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			priv.vo_vpss_in_size[ch].u32Width = stSizeIn.u32Width;
 			priv.vo_vpss_in_size[ch].u32Height = stSizeIn.u32Height;
 			priv.vo_vpss_fit[ch] = fit;
-			_mmf_vpss_deinit(1, ch);
+			_mmf_vpss_deinit(priv.vo_vpss, ch);
 			bool mirror = !g_priv.vo_video_hmirror[ch];
 			bool flip = !g_priv.vo_video_vflip[ch];
 			int fit = priv.vo_vpss_fit[ch];
-			s32Ret = _mmf_vpss_init(1, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
+			s32Ret = _mmf_vpss_init(priv.vo_vpss, ch, stSizeIn, stSizeOut, formatIn, formatOut, fps, depth, mirror, flip, fit);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vpss init failed. s32Ret: 0x%x !\n", s32Ret);
 				return -1;
@@ -2315,10 +2322,10 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			// printf("vpss vo reinit.\r\n");
 			// printf("stSizeIn.u32Width: %d, stSizeIn.u32Height: %d, stSizeOut.u32Width: %d, stSizeOut.u32Height: %d formatOut:%d\n",
 			// 						stSizeIn.u32Width, stSizeIn.u32Height, stSizeOut.u32Width, stSizeOut.u32Height, formatOut);
-			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(1, ch, layer, ch);
+			s32Ret = SAMPLE_COMM_VPSS_Bind_VO(priv.vo_vpss, ch, layer, ch);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("vo bind vpss failed. s32Ret: 0x%x !\n", s32Ret);
-				_mmf_vpss_deinit(1, ch);
+				_mmf_vpss_deinit(priv.vo_vpss, ch);
 				return -1;
 			}
 #endif
@@ -2388,7 +2395,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 			return CVI_FAILURE;
 		}
 
-		s32Ret = CVI_VPSS_SendFrame(1, frame, 1000);
+		s32Ret = CVI_VPSS_SendFrame(priv.vo_vpss, frame, 1000);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VO_SendFrame failed, ret:%#x\n", s32Ret);
 			return s32Ret;
@@ -2446,18 +2453,18 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 
 	#if 0
 		VPSS_GRP_ATTR_S GrpAttr;
-		CVI_VPSS_GetGrpAttr(1, &GrpAttr);
+		CVI_VPSS_GetGrpAttr(priv.vo_vpss, &GrpAttr);
 		mmf_dump_grpattr(&GrpAttr);
 
 		VPSS_CHN_ATTR_S ChnAttr;
-		CVI_VPSS_GetChnAttr(1, ch, &ChnAttr);
+		CVI_VPSS_GetChnAttr(priv.vo_vpss, ch, &ChnAttr);
 		mmf_dump_chnattr(&ChnAttr);
 
 		mmf_dump_frame(&stVideoFrame);
 	#endif
 		// UNUSED(layer);
 		// mmf_vo_frame_push
-		s32Ret = CVI_VPSS_SendFrame(1, &stVideoFrame, 1000);
+		s32Ret = CVI_VPSS_SendFrame(priv.vo_vpss, &stVideoFrame, 1000);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VO_SendFrame failed >< with %#x\n", s32Ret);
 			_mmf_deinit_frame(&stVideoFrame);
