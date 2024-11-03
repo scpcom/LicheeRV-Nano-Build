@@ -3903,7 +3903,7 @@ static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality)
 	return mmf_add_venc_channel(ch, &cfg);
 }
 
-static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_out, SIZE_S size_in)
+static int _mmf_vdec_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_out, SIZE_S size_in, int vb_id)
 {
 	int format_in = PIXEL_FORMAT_YUV_PLANAR_444; //PIXEL_FORMAT_YUV_PLANAR_420;
 	CVI_U32 w_in = size_in.u32Width;
@@ -3960,6 +3960,13 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_o
 		printf("CVI_VDEC_CreateChn [%d] failed with %#x\n", ch, s32Ret);
 		goto out_chn_attr;
 	}
+
+#if 0
+	VDEC_MOD_PARAM_S stModParam;
+	CVI_VDEC_GetModParam(&stModParam);
+	stModParam.enVdecVBSource = VB_SOURCE_COMMON;
+	CVI_VDEC_SetModParam(&stModParam);
+#endif
 
 	priv.dec_chn_vpss[ch] = VPSS_INVALID_GRP;
 
@@ -4032,8 +4039,8 @@ static int _mmf_dec_jpg_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_o
 		goto out_vpss;
 	}
 
-	priv.dec_chn_type[ch] = PT_JPEG;
-	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_JPEG_ID;
+	priv.dec_chn_type[ch] = chn_attr->enType;
+	priv.dec_chn_vb_id[ch] = vb_id;
 
 	priv.dec_chn_size_in[ch] = (SIZE_S){w_in, h_in};
 	priv.dec_chn_cfg[ch].w = w_out;
@@ -4113,58 +4120,6 @@ static int _mmf_dec_jpg_get_frame_info(uint8_t *data, uint32_t size, uint32_t *w
 	return 0;
 }
 
-static int _mmf_dec_h265_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
-{
-	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
-		return -1;
-	}
-	if (priv.dec_chn_is_init[ch])
-		return 0;
-
-	CVI_S32 s32Ret = CVI_SUCCESS;
-
-	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_CreateChn [%d] failed with %d\n", ch, s32Ret);
-		return s32Ret;
-	}
-
-	VDEC_CHN_PARAM_S stChnParam;
-	s32Ret = CVI_VDEC_GetChnParam(ch, &stChnParam);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_GetChnParam failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
-	}
-
-	stChnParam.enPixelFormat = (PIXEL_FORMAT_E)format_out;
-	stChnParam.u32DisplayFrameNum = chn_attr->u32FrameBufCnt - 1;
-
-	s32Ret = CVI_VDEC_SetChnParam(ch, &stChnParam);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_SetChnParam failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
-	}
-
-	s32Ret = CVI_VDEC_StartRecvStream(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_StartRecvStream failed with %d\n", s32Ret);
-		return CVI_FAILURE;
-	}
-
-	priv.dec_chn_type[ch] = PT_H265;
-	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_H26X_ID;
-
-	priv.dec_chn_size_in[ch] = (SIZE_S){chn_attr->u32PicWidth, chn_attr->u32PicHeight};
-	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
-	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
-	priv.dec_chn_cfg[ch].fmt = format_out;
-	priv.dec_chn_cfg[ch].buffer_num = chn_attr->u32FrameBufCnt;
-	priv.dec_chn_running[ch] = 0;
-	priv.dec_chn_is_init[ch] = 1;
-
-	return s32Ret;
-}
-
 #if 0
 int mmf_dec_h265_init(int ch, int w, int h)
 {
@@ -4179,65 +4134,6 @@ int mmf_dec_h265_init(int ch, int w, int h)
 	return mmf_add_vdec_channel(ch, &cfg);
 }
 #endif
-
-static int _mmf_dec_h264_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr)
-{
-	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
-		return -1;
-	}
-	if (priv.dec_chn_is_init[ch])
-		return 0;
-
-	CVI_S32 s32Ret = CVI_SUCCESS;
-
-	s32Ret = CVI_VDEC_CreateChn(ch, chn_attr);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_CreateChn [%d] failed with %d\n", ch, s32Ret);
-		return s32Ret;
-	}
-
-#if 0
-	VDEC_MOD_PARAM_S stModParam;
-	CVI_VDEC_GetModParam(&stModParam);
-	stModParam.enVdecVBSource = VB_SOURCE_COMMON;
-	CVI_VDEC_SetModParam(&stModParam);
-#endif
-
-	VDEC_CHN_PARAM_S stChnParam;
-	s32Ret = CVI_VDEC_GetChnParam(ch, &stChnParam);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_GetChnParam failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
-	}
-
-	stChnParam.enPixelFormat = (PIXEL_FORMAT_E)format_out;
-	stChnParam.u32DisplayFrameNum = chn_attr->u32FrameBufCnt - 1;
-
-	s32Ret = CVI_VDEC_SetChnParam(ch, &stChnParam);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_SetChnParam failed with %#x\n", s32Ret);
-		return CVI_FAILURE;
-	}
-
-	s32Ret = CVI_VDEC_StartRecvStream(ch);
-	if (s32Ret != CVI_SUCCESS) {
-		printf("CVI_VDEC_StartRecvStream failed with %d\n", s32Ret);
-		return CVI_FAILURE;
-	}
-
-	priv.dec_chn_type[ch] = PT_H264;
-	priv.dec_chn_vb_id[ch] = MMF_VB_DEC_H26X_ID;
-
-	priv.dec_chn_size_in[ch] = (SIZE_S){chn_attr->u32PicWidth, chn_attr->u32PicHeight};
-	priv.dec_chn_cfg[ch].w = chn_attr->u32PicWidth;
-	priv.dec_chn_cfg[ch].h = chn_attr->u32PicHeight;
-	priv.dec_chn_cfg[ch].fmt = format_out;
-	priv.dec_chn_cfg[ch].buffer_num = chn_attr->u32FrameBufCnt;
-	priv.dec_chn_running[ch] = 0;
-	priv.dec_chn_is_init[ch] = 1;
-
-	return s32Ret;
-}
 
 #if 0
 int mmf_dec_h264_init(int ch, int w, int h)
@@ -4592,6 +4488,8 @@ int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
 
 static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr, SIZE_S size_in)
 {
+	int vb_id = MMF_VB_DEC_JPEG_ID;
+
 	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		printf("%s: channel %d is out of range.\n", __func__, ch);
 		return -1;
@@ -4601,15 +4499,25 @@ static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_at
 		return -1;
 	}
 
-	if (chn_attr->enType == PT_H265)
-		return _mmf_dec_h265_init(ch, format_out, chn_attr);
-	if (chn_attr->enType == PT_H264)
-		return _mmf_dec_h264_init(ch, format_out, chn_attr);
-	if (chn_attr->enType == PT_JPEG)
-		return _mmf_dec_jpg_init(ch, format_out, chn_attr, size_in);
+	switch (chn_attr->enType) {
+		case PT_H265:
+			vb_id = MMF_VB_DEC_H26X_ID;
+			break;
+		case PT_H264:
+			vb_id = MMF_VB_DEC_H26X_ID;
+			break;
+		case PT_MJPEG:
+			//fallthrough;
+		case PT_JPEG:
+			vb_id = MMF_VB_DEC_JPEG_ID;
+			break;
+		default:
+			printf("%s: type %d may not be supported.\n", __func__, chn_attr->enType);
+			//return -1;
+			break;
+	}
 
-	printf("%s: type %d not supported.\n", __func__, chn_attr->enType);
-	return -1;
+	return _mmf_vdec_init(ch, format_out, chn_attr, size_in, vb_id);
 }
 
 int mmf_add_vdec_channel(int ch, mmf_vdec_cfg_t *cfg)
