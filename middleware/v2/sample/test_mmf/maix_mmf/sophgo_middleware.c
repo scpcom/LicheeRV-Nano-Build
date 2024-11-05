@@ -4163,23 +4163,32 @@ int mmf_dec_jpg_deinit(int ch)
 static int _mmf_dec_jpg_get_frame_info(uint8_t *data, uint32_t size, uint32_t *width, uint32_t *height, int *format)
 {
 	uint8_t *j_ptr = data;
-	uint32_t jpeg_w = 0;
-	uint32_t jpeg_h = 0;
+	uint8_t jpeg_b = 0, jpeg_c = 0;
+	uint32_t jpeg_w = 0, jpeg_h = 0;
 
-	if (data == NULL || size < 256 || width == NULL || height == NULL || format == NULL) {
+	if (data == NULL || size < 1024 || width == NULL || height == NULL || format == NULL) {
 		printf("invalid param\n");
 		return -1;
 	}
 
+	// Start of Image (SoI) marker and Application x (APPx) segment
 	if (j_ptr[0] == 0xFF && j_ptr[1] == 0xD8 &&
-	    j_ptr[2] == 0xFF && j_ptr[3] == 0xE0 &&
-            j_ptr[4] == 0x00 && j_ptr[5] == 0x10) {
+	    j_ptr[2] == 0xFF && (j_ptr[3] & 0xF0) == 0xE0) {
 		j_ptr += 2;
-		while (j_ptr < data + 256) {
+		while (j_ptr < data + 1024 - 2 - 8) {
+			// segment length
 			uint32_t jm_len = (j_ptr[2] << 8) | j_ptr[3];
-			if (j_ptr[0] == 0xFF && j_ptr[1] == 0xC0 && j_ptr[2] == 0x00 && j_ptr[3] == 0x11) {
+			// Start of Frame (SoF) segment
+			if (j_ptr[0] == 0xFF && j_ptr[1] == 0xC0 &&
+			    j_ptr[2] == 0x00 && j_ptr[3] >= 0x08 && j_ptr[3] < 0x12) {
+				// bits per sample
+				jpeg_b = j_ptr[4];
+				// image height
 				jpeg_h = (j_ptr[5] << 8) | j_ptr[6];
+				// image width
 				jpeg_w = (j_ptr[7] << 8) | j_ptr[8];
+				// component count
+				jpeg_c = j_ptr[9];
 				break;
 			}
 			j_ptr += 2;
@@ -4187,7 +4196,10 @@ static int _mmf_dec_jpg_get_frame_info(uint8_t *data, uint32_t size, uint32_t *w
 		}
 	}
 
-	if (jpeg_w && jpeg_h) {
+	if (jpeg_w && jpeg_h && jpeg_b && jpeg_c) {
+#ifdef DEBUG_EN
+		printf("%s: %dx%d %d bps %d components\n", __func__, jpeg_w, jpeg_h, jpeg_b, jpeg_c);
+#endif
 		*width = jpeg_w;
 		*height = jpeg_h;
 	}
