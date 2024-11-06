@@ -2957,6 +2957,66 @@ static PAYLOAD_TYPE_E mmf_invert_codec_to_mmf(int maix_codec) {
 	}
 }
 
+static CVI_S32 _mmf_venc_vpss_init(int ch, mmf_venc_cfg_t *cfg)
+{
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
+	switch (cfg->fmt) {
+	case PIXEL_FORMAT_RGB_888:
+	{
+		VPSS_GRP out_grp = CVI_VPSS_GetAvailableGrp();
+
+		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (PIXEL_FORMAT_E)cfg->fmt, PIXEL_FORMAT_YUV_PLANAR_420, cfg->output_fps, 0, CVI_FALSE, CVI_FALSE, 0);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS init failed with %d\n", s32Ret);
+			return s32Ret;
+		}
+
+		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(out_grp, ch, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS bind VENC failed with %#x\n", s32Ret);
+			_mmf_vpss_deinit(out_grp, ch);
+			return s32Ret;
+		}
+
+		priv.enc_chn_vpss[ch] = out_grp;
+		break;
+	}
+	case PIXEL_FORMAT_NV21:
+		break;
+	default:
+		printf("unknown format!\n");
+		s32Ret = CVI_FAILURE;
+		return s32Ret;
+	}
+
+	return s32Ret;
+}
+
+static CVI_S32 _mmf_venc_vpss_deinit(int ch)
+{
+	CVI_S32 s32Ret = CVI_SUCCESS;
+
+	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
+		VPSS_GRP out_grp = priv.enc_chn_vpss[ch];
+
+		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(out_grp, ch, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS unbind VENC failed with %d\n", s32Ret);
+		}
+
+		s32Ret = _mmf_vpss_deinit(out_grp, ch);
+		if (s32Ret != CVI_SUCCESS) {
+			printf("VPSS deinit failed with %d\n", s32Ret);
+		}
+
+		priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
+	}
+
+	return s32Ret;
+}
+
 static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 {
 	if (ch < 0 || ch >= MMF_ENC_MAX_CHN) {
@@ -3028,32 +3088,8 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 		goto out_chn;
 	}
 
-	priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
-	switch (cfg->fmt) {
-	case PIXEL_FORMAT_RGB_888:
-	{
-		VPSS_GRP out_grp = CVI_VPSS_GetAvailableGrp();
-
-		s32Ret = _mmf_vpss_init(out_grp, ch, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, (SIZE_S){(CVI_U32)cfg->w, (CVI_U32)cfg->h}, PIXEL_FORMAT_RGB_888, PIXEL_FORMAT_YUV_PLANAR_420, cfg->output_fps, 0, CVI_FALSE, CVI_FALSE, 0);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS init failed with %d\n", s32Ret);
-			goto out_chn;
-		}
-		priv.enc_chn_vpss[ch] = out_grp;
-
-		s32Ret = SAMPLE_COMM_VPSS_Bind_VENC(out_grp, ch, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS bind VENC failed with %#x\n", s32Ret);
-			goto out_vpss;
-		}
-
-		break;
-	}
-	case PIXEL_FORMAT_NV21:
-		break;
-	default:
-		printf("unknown format!\n");
-		s32Ret = -1;
+	s32Ret = _mmf_venc_vpss_init(ch, cfg);
+	if (s32Ret != CVI_SUCCESS) {
 		goto out_chn;
 	}
 
@@ -3085,10 +3121,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	return s32Ret;
 
 out_vpss:
-	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
-		_mmf_vpss_deinit(priv.enc_chn_vpss[ch], ch);
-		priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
-	}
+	_mmf_venc_vpss_deinit(ch);
 out_chn:
 	CVI_VENC_DestroyChn(ch);
 	return s32Ret;
@@ -3206,12 +3239,17 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		return s32Ret;
 	}
 
+	s32Ret = _mmf_venc_vpss_init(ch, cfg);
+	if (s32Ret != CVI_SUCCESS) {
+		goto out_chn;
+	}
+
 	VENC_RECV_PIC_PARAM_S stRecvParam;
 	stRecvParam.s32RecvPicNum = -1;
 	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_StartRecvFrame failed with %d\n", s32Ret);
-		return CVI_FAILURE;
+		goto out_vpss;
 	}
 
 	{
@@ -3220,14 +3258,14 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetH265Trans(ch, &h265Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH265Trans failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 		h265Trans.cb_qp_offset = 0;
 		h265Trans.cr_qp_offset = 0;
 		s32Ret = CVI_VENC_SetH265Trans(ch, &h265Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetH265Trans failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3237,7 +3275,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetH265Vui(ch, &h265Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH265Vui failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 
 		h265Vui.stVuiAspectRatio.aspect_ratio_info_present_flag = 0;
@@ -3264,7 +3302,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetH265Vui(ch, &h265Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetH265Vui failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3274,7 +3312,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetRcParam(ch, &stRcParam);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetRcParam failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 		stRcParam.s32FirstFrameStartQp = 35;
 		stRcParam.stParamH265Cbr.u32MinIprop = 1;
@@ -3289,7 +3327,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetRcParam(ch, &stRcParam);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetRcParam failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3299,7 +3337,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetFrameLostStrategy(ch, &stFL);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetFrameLostStrategy failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 		stFL.enFrmLostMode = FRMLOST_PSKIP;
 
@@ -3308,7 +3346,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetFrameLostStrategy(ch, &stFL);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetFrameLostStrategy failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3328,6 +3366,12 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	priv.enc_chn_running[ch] = 0;
 	priv.enc_chn_is_init[ch] = 1;
 
+	return s32Ret;
+
+out_vpss:
+	_mmf_venc_vpss_deinit(ch);
+out_chn:
+	CVI_VENC_DestroyChn(ch);
 	return s32Ret;
 }
 
@@ -3397,12 +3441,17 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 	stModParam.stH264eModParam.u32UserDataMaxLen = 3072;
 	CVI_VENC_SetModParam(&stModParam);
 
+	s32Ret = _mmf_venc_vpss_init(ch, cfg);
+	if (s32Ret != CVI_SUCCESS) {
+		goto out_chn;
+	}
+
 	VENC_RECV_PIC_PARAM_S stRecvParam;
 	stRecvParam.s32RecvPicNum = -1;
 	s32Ret = CVI_VENC_StartRecvFrame(ch, &stRecvParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_StartRecvFrame failed with %d\n", s32Ret);
-		return CVI_FAILURE;
+		goto out_vpss;
 	}
 
 	{
@@ -3411,7 +3460,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetH264Trans(ch, &h264Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH264Trans failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 
 		//h264Trans.cb_qp_offset = 0;
@@ -3421,7 +3470,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetH264Trans(ch, &h264Trans);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetH264Trans failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3431,7 +3480,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetH264Vui(ch, &h264Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetH264Vui failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 
 		h264Vui.stVuiAspectRatio.aspect_ratio_info_present_flag = 0;
@@ -3458,7 +3507,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetH264Vui(ch, &h264Vui);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetH264Vui failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3468,7 +3517,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetRcParam(ch, &stRcParam);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetRcParam failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 		stRcParam.s32FirstFrameStartQp = 35;
 		stRcParam.stParamH264Cbr.u32MinIprop = 1;
@@ -3483,7 +3532,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetRcParam(ch, &stRcParam);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetRcParam failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3493,7 +3542,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_GetFrameLostStrategy(ch, &stFL);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_GetFrameLostStrategy failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 		stFL.enFrmLostMode = FRMLOST_PSKIP;
 
@@ -3502,7 +3551,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 		s32Ret = CVI_VENC_SetFrameLostStrategy(ch, &stFL);
 		if (s32Ret != CVI_SUCCESS) {
 			printf("CVI_VENC_SetFrameLostStrategy failed with %d\n", s32Ret);
-			return s32Ret;
+			goto out_vpss;
 		}
 	}
 
@@ -3522,6 +3571,12 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 	priv.enc_chn_running[ch] = 0;
 	priv.enc_chn_is_init[ch] = 1;
 
+	return s32Ret;
+
+out_vpss:
+	_mmf_venc_vpss_deinit(ch);
+out_chn:
+	CVI_VENC_DestroyChn(ch);
 	return s32Ret;
 }
 
@@ -3559,21 +3614,7 @@ static int mmf_venc_deinit(int ch)
 		mmf_venc_free(ch);
 	}
 
-	if (priv.enc_chn_vpss[ch] != VPSS_INVALID_GRP) {
-		VPSS_GRP out_grp = priv.enc_chn_vpss[ch];
-
-		s32Ret = SAMPLE_COMM_VPSS_UnBind_VENC(out_grp, ch, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS unbind VENC failed with %d\n", s32Ret);
-		}
-
-		s32Ret = _mmf_vpss_deinit(out_grp, ch);
-		if (s32Ret != CVI_SUCCESS) {
-			printf("VPSS deinit failed with %d\n", s32Ret);
-		}
-
-		priv.enc_chn_vpss[ch] = VPSS_INVALID_GRP;
-	}
+	_mmf_venc_vpss_deinit(ch);
 
 	s32Ret = CVI_VENC_StopRecvFrame(ch);
 	if (s32Ret != CVI_SUCCESS) {
