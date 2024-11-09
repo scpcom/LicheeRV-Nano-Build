@@ -40,6 +40,8 @@
 #define DEBUG(fmt, args...)
 #endif
 
+// #define USE_AVC2FLV_ITERATE
+
 // #define FILE_RECORDER_EN
 
 #define RTSP_SERVER_TYPE 2
@@ -453,7 +455,11 @@ static int maix_rtmp_server_push_h264(mmf_stream_t *vec, uint32_t timestamp)
 
 			uint8_t *flv;
 			int flv_size;
+#if defined(USE_AVC2FLV_ITERATE) && !defined(DEBUG_EN)
+			if (0 != maix_avc2flv_prepare(tmp, tmp_offset)) {
+#else
 			if (0 != maix_avc2flv(tmp, tmp_offset, timestamp, timestamp, &flv, &flv_size)) {
+#endif
 				printf("maix_avc2flv failed!\r\n");
 				free(tmp);
 				tmp = NULL;
@@ -462,9 +468,24 @@ static int maix_rtmp_server_push_h264(mmf_stream_t *vec, uint32_t timestamp)
 #ifdef DEBUG_EN
 			//printf("tmp_offset:%d flv:%p flv_size:%d timestamp:%d\r\n", tmp_offset, flv, flv_size, timestamp);
 			flv_buffer_send(flv, flv_size, timestamp);
-#else
+#ifdef FILE_RECORDER_EN
+			if (priv.out_fp) {
+				fwrite(flv, 1, flv_size, priv.out_fp);
+			}
+#endif
+#else // DEBUG_EN
 			uint8_t *flv_next = flv;
 			while (!priv.rtmp_stop && !exit_flag) {
+#ifdef USE_AVC2FLV_ITERATE
+				flv_size = 0;
+				if (0 != maix_avc2flv_iterate((void**)&flv, &flv_size)) {
+					break;
+				}
+				if (flv_size < 1) {
+					continue;
+				}
+				flv_next = flv;
+#endif
 				if (flv_next >= (flv + flv_size)) break;
 				struct flv_tag_header_t tag_header;
 				memset(&tag_header, 0, sizeof(tag_header));
@@ -473,14 +494,15 @@ static int maix_rtmp_server_push_h264(mmf_stream_t *vec, uint32_t timestamp)
 				// printf("flv:%p flv_next:%p tag len:%d timestamp:%d\r\n", flv, flv_next, tag_header.size, timestamp);
 
 				rtmp_server_send_video(priv.s_rtmp, flv_next + FLV_TAG_HEAD_LEN, tag_header.size, timestamp);
+#ifdef FILE_RECORDER_EN
+				if (priv.out_fp) {
+					fwrite(flv_next, 1, FLV_PRE_TAG_LEN + FLV_TAG_HEAD_LEN + tag_header.size, priv.out_fp);
+				}
+#endif
+
 				flv_next += FLV_PRE_TAG_LEN + FLV_TAG_HEAD_LEN + tag_header.size;
 			}
-#endif
-#ifdef FILE_RECORDER_EN
-			if (priv.out_fp) {
-				fwrite(flv, 1, flv_size, priv.out_fp);
-			}
-#endif
+#endif // DEBUG_EN
 
 			tmp_offset = 0;
 		}
