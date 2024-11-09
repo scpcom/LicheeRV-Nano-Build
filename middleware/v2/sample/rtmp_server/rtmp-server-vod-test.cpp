@@ -48,15 +48,21 @@ static void sig_handle(CVI_S32 signo)
 	exit_flag = 1;
 }
 
-static ThreadLocker s_locker;
-static pthread_t t;
-static rtmp_server_t* s_rtmp;
-static const char* s_file;
-static int rtmp_stop = 0;
-static int rtmp_playing = 0;
+typedef struct {
+	ThreadLocker s_locker;
+	pthread_t t_rtmp;
+	rtmp_server_t* s_rtmp;
+	const char* s_file;
+
+	int rtmp_is_init;
+	int rtmp_playing;
+	int rtmp_stop;
 #ifdef DEBUG_EN
-static uint32_t out_cnt = 0;
+	uint32_t out_cnt;
 #endif
+} priv_t;
+
+static priv_t priv;
 
 static uint64_t _get_time_us(void)
 {
@@ -354,24 +360,24 @@ int flv_buffer_send(void* inbuf, size_t bytes, uint32_t ts)
 		{
 			printf("%s: ts %d != %d\n", __func__, ts, timestamp);
 		}
-		if (rtmp_stop || exit_flag)
+		if (priv.rtmp_stop || exit_flag)
 		{
 			break;
 		}
 		if (FLV_TYPE_AUDIO == type)
 		{
-			AutoThreadLocker locker(s_locker);
-			r = rtmp_server_send_audio(s_rtmp, packet, taglen, timestamp);
+			AutoThreadLocker locker(priv.s_locker);
+			r = rtmp_server_send_audio(priv.s_rtmp, packet, taglen, timestamp);
 		}
 		else if (FLV_TYPE_VIDEO == type)
 		{
-			AutoThreadLocker locker(s_locker);
-			r = rtmp_server_send_video(s_rtmp, packet, taglen, timestamp);
+			AutoThreadLocker locker(priv.s_locker);
+			r = rtmp_server_send_video(priv.s_rtmp, packet, taglen, timestamp);
 		}
 		else if (FLV_TYPE_SCRIPT == type)
 		{
-			AutoThreadLocker locker(s_locker);
-			r = rtmp_server_send_script(s_rtmp, packet, taglen, timestamp);
+			AutoThreadLocker locker(priv.s_locker);
+			r = rtmp_server_send_script(priv.s_rtmp, packet, taglen, timestamp);
 		}
 		else
 		{
@@ -449,7 +455,7 @@ static int maix_rtmp_server_push_h264(FILE* out_fp, mmf_stream_t *vec, uint32_t 
 			flv_buffer_send(flv, flv_size, timestamp);
 #else
 			uint8_t *flv_next = flv;
-			while (!rtmp_stop && !exit_flag) {
+			while (!priv.rtmp_stop && !exit_flag) {
 				if (flv_next >= (flv + flv_size)) break;
 				struct flv_tag_header_t tag_header;
 				memset(&tag_header, 0, sizeof(tag_header));
@@ -457,7 +463,7 @@ static int maix_rtmp_server_push_h264(FILE* out_fp, mmf_stream_t *vec, uint32_t 
 
 				// printf("flv:%p flv_next:%p tag len:%d timestamp:%d\r\n", flv, flv_next, tag_header.size, timestamp);
 
-				rtmp_server_send_video(s_rtmp, flv_next + FLV_TAG_HEAD_LEN, tag_header.size, timestamp);
+				rtmp_server_send_video(priv.s_rtmp, flv_next + FLV_TAG_HEAD_LEN, tag_header.size, timestamp);
 				flv_next += FLV_PRE_TAG_LEN + FLV_TAG_HEAD_LEN + tag_header.size;
 			}
 #endif
@@ -483,7 +489,7 @@ static void rtmp_send_memory_data(FILE* out_fp, uint64_t timestamp, mmf_stream_t
 		return;
 
 #ifdef DEBUG_EN
-	if (!out_cnt) {
+	if (!priv.out_cnt) {
 		uint8_t *flv;
 		int flv_size;
 		maix_avc2flv(NULL, 0, 0, 0, &flv, &flv_size);
@@ -496,9 +502,9 @@ static void rtmp_send_memory_data(FILE* out_fp, uint64_t timestamp, mmf_stream_t
 	}
 
 #ifdef DEBUG_EN
-	out_cnt++;
+	priv.out_cnt++;
 
-	if (out_cnt > 3000) {
+	if (priv.out_cnt > 3000) {
 		uint8_t *flv;
 		int flv_size;
 		maix_avc2flv(NULL, 0, timestamp, timestamp, &flv, &flv_size);
@@ -516,7 +522,7 @@ static int STDCALL rtmp_server_file_worker(void* param)
 	size_t taglen;
 	uint32_t timestamp;
 	static uint64_t clock0 = system_clock() - 200; // send more data, open fast
-	void* f = flv_reader_create(s_file);
+	void* f = flv_reader_create(priv.s_file);
 	UNUSED(param);
 
 	static unsigned char packet[8 * 1024 * 1024];
@@ -529,21 +535,21 @@ static int STDCALL rtmp_server_file_worker(void* param)
 		else if (clock0 + timestamp > t + 3 * 1000)
 			clock0 = t - timestamp;
 
-		if (rtmp_stop || exit_flag)
+		if (priv.rtmp_stop || exit_flag)
 		{
 			break;
 		}
 		if (FLV_TYPE_AUDIO == type)
 		{
-			r = rtmp_server_send_audio(s_rtmp, packet, taglen, timestamp);
+			r = rtmp_server_send_audio(priv.s_rtmp, packet, taglen, timestamp);
 		}
 		else if (FLV_TYPE_VIDEO == type)
 		{
-			r = rtmp_server_send_video(s_rtmp, packet, taglen, timestamp);
+			r = rtmp_server_send_video(priv.s_rtmp, packet, taglen, timestamp);
 		}
 		else if (FLV_TYPE_SCRIPT == type)
 		{
-			r = rtmp_server_send_script(s_rtmp, packet, taglen, timestamp);
+			r = rtmp_server_send_script(priv.s_rtmp, packet, taglen, timestamp);
 		}
 		else
 		{
@@ -560,8 +566,8 @@ static int STDCALL rtmp_server_file_worker(void* param)
 
 	flv_reader_destroy(f);
 
-	rtmp_playing = 0;
-	thread_destroy(t);
+	priv.rtmp_playing = 0;
+	thread_destroy(priv.t_rtmp);
 	return 0;
 }
 
@@ -569,7 +575,7 @@ static int STDCALL rtmp_server_camera_worker(void* param)
 {
 #ifdef DEBUG_EN
 	FILE* out_fp = fopen("./test.flv", "wb+");
-	out_cnt = 0;
+	priv.out_cnt = 0;
 #else
 	FILE* out_fp = NULL;
 #endif
@@ -619,7 +625,7 @@ static int STDCALL rtmp_server_camera_worker(void* param)
 	uint64_t last_loop_us = start;
 	uint64_t timestamp = 0;
 	int last_vi_pop = -1;
-	while (!exit_flag && !rtmp_stop) {
+	while (!exit_flag && !priv.rtmp_stop) {
 		void *data;
 		int data_size, width, height, format;
 
@@ -701,8 +707,8 @@ _exit:
 
 	maix_avc2flv_deinit();
 
-	rtmp_playing = 0;
-	thread_destroy(t);
+	priv.rtmp_playing = 0;
+	thread_destroy(priv.t_rtmp);
 
 	return 0;
 }
@@ -720,14 +726,14 @@ static int rtmp_server_onplay(void* param, const char* app, const char* stream, 
 {
 	printf("rtmp_server_onplay(%s, %s, %f, %f, %d)\n", app, stream, start, duration, (int)reset);
 
-	if (rtmp_playing)
+	if (priv.rtmp_playing)
 		return 0;
 
-	rtmp_playing = 1;
-	if (s_file) {
-		return thread_create(&t, rtmp_server_file_worker, param);
+	priv.rtmp_playing = 1;
+	if (priv.s_file) {
+		return thread_create(&priv.t_rtmp, rtmp_server_file_worker, param);
 	}
-	return thread_create(&t, rtmp_server_camera_worker, param);
+	return thread_create(&priv.t_rtmp, rtmp_server_camera_worker, param);
 }
 
 static int rtmp_server_onpause(void* param, int pause, uint32_t ms)
@@ -757,6 +763,10 @@ void rtmp_server_vod_test(const char* flv)
 {
 	int r;
 	struct rtmp_server_handler_t handler;
+
+	if (priv.rtmp_is_init)
+		return;
+
 	memset(&handler, 0, sizeof(handler));
 	handler.send = rtmp_server_send;
 	//handler.oncreate_stream = rtmp_server_oncreate_stream;
@@ -769,6 +779,12 @@ void rtmp_server_vod_test(const char* flv)
 	//handler.onaudio = rtmp_server_onaudio;
 	handler.ongetduration = rtmp_server_ongetduration;
 
+	priv.rtmp_playing = 0;
+	priv.rtmp_stop = 0;
+#ifdef DEBUG_EN
+	priv.out_cnt = 0;
+#endif
+
 	socket_init();
 
 	socklen_t n;
@@ -777,6 +793,7 @@ void rtmp_server_vod_test(const char* flv)
 
 	printf("%s: started\n", __func__);
 
+	priv.rtmp_is_init = 1;
 	exit_flag = 0;
 	while (!exit_flag) {
 		socket_t c = socket_accept_by_time(s, &ss, &n, 10);
@@ -784,10 +801,10 @@ void rtmp_server_vod_test(const char* flv)
 			continue;
 		}
 
-		rtmp_stop = 0;
-		rtmp_playing = 0;
-		s_file = flv;
-		s_rtmp = rtmp_server_create(&c, &handler);
+		priv.rtmp_playing = 0;
+		priv.rtmp_stop = 0;
+		priv.s_file = flv;
+		priv.s_rtmp = rtmp_server_create(&c, &handler);
 
 		printf("%s: open\n", __func__);
 
@@ -797,8 +814,8 @@ void rtmp_server_vod_test(const char* flv)
 			r = socket_recv_by_time(c, packet, sizeof(packet), 0, 5);
 			if (r > 0)
 			{
-				AutoThreadLocker locker(s_locker);
-				if (0 != rtmp_server_input(s_rtmp, packet, r)) {
+				AutoThreadLocker locker(priv.s_locker);
+				if (0 != rtmp_server_input(priv.s_rtmp, packet, r)) {
 					break;
 				}
 			}
@@ -809,19 +826,21 @@ void rtmp_server_vod_test(const char* flv)
 			}
 		}
 
-		rtmp_stop = 1;
-		while (rtmp_playing)
+		priv.rtmp_stop = 1;
+		while (priv.rtmp_playing)
 		{
 			usleep(1);
 		}
 
-		rtmp_server_destroy(s_rtmp);
+		rtmp_server_destroy(priv.s_rtmp);
 		socket_close(c);
 		printf("%s: close\n", __func__);
 	}
 
 	socket_close(s);
 	socket_cleanup();
+
+	priv.rtmp_is_init = 0;
 
 	printf("%s: done\n", __func__);
 }
