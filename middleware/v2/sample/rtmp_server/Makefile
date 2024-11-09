@@ -12,7 +12,8 @@ INCS = -I$(MW_INC) -I$(ISP_INC) -I../common/ -I$(KERNEL_INC) -I$(MW_INC)/linux -
 
 SRCS_CPP += $(wildcard $(SDIR)/*.cpp)
 
-CFLAGS += -I$(SDIR)/../test_mmf/media_server-1.0.1/libflv/include \
+CFLAGS += -I$(SDIR)/../test_mmf/maixcam_lib/include \
+-I$(SDIR)/../test_mmf/media_server-1.0.1/libflv/include \
 -I$(SDIR)/../test_mmf/media_server-1.0.1/librtmp/include \
 -I$(SDIR)/../test_mmf/media_server-1.0.1/sdk/include
 CPPFLAGS += $(subst -std=gnu11,-std=gnu++11, $(CFLAGS)) $(INCS) \
@@ -38,13 +39,14 @@ TARGET = rtmp_server
 ifeq ($(CONFIG_ENABLE_SDK_ASAN), y)
 TARGET = rtmp_server_asan
 endif
+ORIGIN = /maixapp/$(TARGET)
 
 PKG_CONFIG_PATH = $(MW_PATH)/pkgconfig
 REQUIRES = cvi_common cvi_sample cvi_ive
 
 MW_LIBS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config --libs --define-variable=mw_dir=$(MW_PATH) $(REQUIRES))
 
-LIBS = $(MW_LIBS)
+LIBS = $(filter-out -lsample, $(filter-out -lsns_full, $(MW_LIBS)))
 ifeq ($(MULTI_PROCESS_SUPPORT), 1)
 DEFS += -DRPC_MULTI_PROCESS
 LIBS += -lnanomsg
@@ -54,9 +56,9 @@ EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
 MSK_LIBD = ../test_mmf/media_server-1.0.1/release.linux
-MMF_LIBD = ../test_mmf/maix_mmf/release.linux
+MCL_LIBD = ../test_mmf/maixcam_lib/release.linux
 
-LIBS += -L$(SDIR)/$(MSK_LIBD) -L$(MMF_LIBD) -lhttp -lflv -lrtmp -lmov -lmpeg -lsdk -lavcodec -lavbsf
+LIBS += -L$(SDIR)/$(MSK_LIBD) -lvdec -L$(MCL_LIBD) -lhttp -lflv -lrtmp -lmov -lmpeg -lsdk -lavcodec -lavbsf
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -109,7 +111,7 @@ $(SDIR)/%.o: $(SDIR)/%.c
 	@echo [$(notdir $(CC))] $(notdir $@)
 
 $(TARGET): mmflibs $(COMM_OBJ) $(OBJS) $(ISP_OBJ) $(MW_LIB)/libvenc.a $(MW_LIB)/libsys.a
-	@$(CXX) -o $@ -Wl,--start-group -lflv -lrtmp  $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaix_mmf $(ELFFLAGS) $(EXTRA_LDFLAGS)
+	@$(CXX) -o $@ -Wl,-rpath=$(ORIGIN)/dl_lib -Wl,--start-group -lflv -lrtmp $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaixcam_lib $(filter-out -static, $(ELFFLAGS)) $(EXTRA_LDFLAGS)
 	@echo -e $(BLUE)[LINK]$(END)[$(notdir $(CXX))] $(notdir $@)
 
 clean: clean_mmflibs
