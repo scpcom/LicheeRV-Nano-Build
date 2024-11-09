@@ -40,6 +40,8 @@
 #define DEBUG(fmt, args...)
 #endif
 
+// #define FILE_RECORDER_EN
+
 #define RTSP_SERVER_TYPE 2
 
 int exit_flag = 0;
@@ -60,7 +62,8 @@ typedef struct {
 	int rtmp_is_init;
 	int rtmp_playing;
 	int rtmp_stop;
-#ifdef DEBUG_EN
+#ifdef FILE_RECORDER_EN
+	FILE* out_fp;
 	uint32_t out_cnt;
 #endif
 
@@ -417,7 +420,7 @@ static uint8_t* h264_startcode(uint8_t* data, size_t bytes)
 	return NULL;
 }
 
-static int maix_rtmp_server_push_h264(FILE* out_fp, mmf_stream_t *vec, uint32_t timestamp)
+static int maix_rtmp_server_push_h264(mmf_stream_t *vec, uint32_t timestamp)
 {
 	int num = vec->count;
 	int tmp_offset = 0;
@@ -473,9 +476,11 @@ static int maix_rtmp_server_push_h264(FILE* out_fp, mmf_stream_t *vec, uint32_t 
 				flv_next += FLV_PRE_TAG_LEN + FLV_TAG_HEAD_LEN + tag_header.size;
 			}
 #endif
-			if (out_fp) {
-				fwrite(flv, 1, flv_size, out_fp);
+#ifdef FILE_RECORDER_EN
+			if (priv.out_fp) {
+				fwrite(flv, 1, flv_size, priv.out_fp);
 			}
+#endif
 
 			tmp_offset = 0;
 		}
@@ -489,36 +494,44 @@ static int maix_rtmp_server_push_h264(FILE* out_fp, mmf_stream_t *vec, uint32_t 
 	return 0;
 }
 
-static void rtmp_send_memory_data(FILE* out_fp, uint64_t timestamp, mmf_stream_t *stream)
+static void rtmp_send_memory_data(uint64_t timestamp, mmf_stream_t *stream)
 {
 	if (stream->count < 1)
 		return;
 
-#ifdef DEBUG_EN
-	if (!priv.out_cnt) {
+#ifdef FILE_RECORDER_EN
+	if (!priv.out_fp && !priv.out_cnt) {
+		priv.out_fp = fopen("./test.flv", "wb+");
+	}
+	if (priv.out_fp && !priv.out_cnt) {
 		uint8_t *flv;
 		int flv_size;
 		maix_avc2flv(NULL, 0, 0, 0, &flv, &flv_size);
-		fwrite(flv, 1, flv_size, out_fp);
+		fwrite(flv, 1, flv_size, priv.out_fp);
 	}
 #endif
 
-	if (0 != maix_rtmp_server_push_h264(out_fp, stream, timestamp)) {
+	if (0 != maix_rtmp_server_push_h264(stream, timestamp)) {
 		printf("rtmp push failed!\r\n");
 	}
 
-#ifdef DEBUG_EN
-	priv.out_cnt++;
-
-	if (priv.out_cnt > 3000) {
+#ifdef FILE_RECORDER_EN
+	if (!priv.out_fp) {
+		return;
+	}
+	if (priv.out_cnt >= 3000) {
 		uint8_t *flv;
 		int flv_size;
 		maix_avc2flv(NULL, 0, timestamp, timestamp, &flv, &flv_size);
-		fwrite(flv, 1, flv_size, out_fp);
+		fwrite(flv, 1, flv_size, priv.out_fp);
 
-		fclose(out_fp);
+		fclose(priv.out_fp);
+		priv.out_fp = NULL;
 		printf("%s: file written.\n", __func__);
+		return;
 	}
+
+	priv.out_cnt++;
 #endif
 }
 
@@ -579,12 +592,6 @@ static int STDCALL rtmp_server_file_worker(void* param)
 
 static int STDCALL rtmp_server_camera_worker(void* param)
 {
-#ifdef DEBUG_EN
-	FILE* out_fp = fopen("./test.flv", "wb+");
-	priv.out_cnt = 0;
-#else
-	FILE* out_fp = NULL;
-#endif
 	UNUSED(param);
 
 	if (0 != mmf_init()) {
@@ -680,7 +687,7 @@ static int STDCALL rtmp_server_camera_worker(void* param)
 			}
 
 			if (stream_size > 0) {
-				rtmp_send_memory_data(out_fp, timestamp, &stream);
+				rtmp_send_memory_data(timestamp, &stream);
 			}
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - start);
@@ -859,7 +866,8 @@ int rtmp_server_init(char *ip, int port, const char* flv)
 
 	priv.rtmp_playing = 0;
 	priv.rtmp_stop = 0;
-#ifdef DEBUG_EN
+#ifdef FILE_RECORDER_EN
+	priv.out_fp = NULL;
 	priv.out_cnt = 0;
 #endif
 
