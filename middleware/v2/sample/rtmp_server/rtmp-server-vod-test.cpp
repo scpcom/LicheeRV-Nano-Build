@@ -506,8 +506,9 @@ static void rtmp_send_memory_data(uint64_t timestamp, mmf_stream_t *stream)
 	if (priv.out_fp && !priv.out_cnt) {
 		uint8_t *flv;
 		int flv_size;
-		maix_avc2flv(NULL, 0, 0, 0, &flv, &flv_size);
+		maix_flv_get_header(0, 1, &flv, &flv_size);
 		fwrite(flv, 1, flv_size, priv.out_fp);
+		printf("%s: file recording\n", __func__);
 	}
 #endif
 
@@ -522,7 +523,7 @@ static void rtmp_send_memory_data(uint64_t timestamp, mmf_stream_t *stream)
 	if (priv.out_cnt >= 3000) {
 		uint8_t *flv;
 		int flv_size;
-		maix_avc2flv(NULL, 0, timestamp, timestamp, &flv, &flv_size);
+		maix_flv_get_tail(&flv, &flv_size);
 		fwrite(flv, 1, flv_size, priv.out_fp);
 
 		fclose(priv.out_fp);
