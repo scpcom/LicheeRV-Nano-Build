@@ -18,7 +18,6 @@ TARGET = kvm_stream
 ifeq ($(CONFIG_ENABLE_SDK_ASAN), y)
 TARGET = kvm_stream_asan
 endif
-ORIGIN = /kvmapp/$(TARGET)
 
 PKG_CONFIG_PATH = $(MW_PATH)/pkgconfig
 REQUIRES = cvi_common cvi_sample
@@ -35,9 +34,7 @@ endif
 EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
-MCL_LIBD = ../test_mmf/maixcam_lib/release.linux
-
-LIBS += -lvdec -L$(MCL_LIBD)
+LIBS += -lvdec
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -57,6 +54,7 @@ all: $(TARGET)
 
 mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maixcam_lib/
+	@cp -p ../test_mmf/maixcam_lib/release.linux/libmaixcam_lib.so $(MW_LIB)/
 
 clean_mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maixcam_lib/ clean
@@ -75,7 +73,7 @@ $(SDIR)/streameye.o: $(SDIR)/streameye.c
 	@echo [$(notdir $(CC))] $(notdir $@)
 
 $(TARGET): mmflibs $(COMM_OBJ) $(OBJS) $(ISP_OBJ) $(MW_LIB)/libvpu.a $(MW_LIB)/libsys.a
-	@$(CXX) -o $@ -Wl,-rpath=$(ORIGIN)/dl_lib -Wl,--start-group $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaixcam_lib $(filter-out -static, $(ELFFLAGS)) $(EXTRA_LDFLAGS)
+	@$(CXX) -o $@ -Wl,-rpath='$$ORIGIN/dl_lib' -Wl,-rpath=/mnt/system/usr/lib -Wl,-rpath=/mnt/system/usr/lib/3rd -Wl,--start-group $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaixcam_lib $(filter-out -static, $(ELFFLAGS)) $(EXTRA_LDFLAGS)
 	@echo -e $(BLUE)[LINK]$(END)[$(notdir $(CXX))] $(notdir $@)
 
 clean: clean_mmflibs
