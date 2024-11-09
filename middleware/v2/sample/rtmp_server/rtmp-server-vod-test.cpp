@@ -23,6 +23,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <assert.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <ifaddrs.h>
 
 #include "cvi_buffer.h"
 #include "sample_comm.h"
@@ -60,6 +63,9 @@ typedef struct {
 #ifdef DEBUG_EN
 	uint32_t out_cnt;
 #endif
+
+	char ip[16];
+	int port;
 } priv_t;
 
 static priv_t priv;
@@ -615,7 +621,7 @@ static int STDCALL rtmp_server_camera_worker(void* param)
 
 	mmf_vi_set_pop_timeout(100);
 
-	//printf("rtsp://%s:%d/live\n", rtsp_get_server_ip(), rtsp_get_server_port());
+	//printf("rtmp://%s:%d/live/stream\n", rtmp_get_server_ip(), rtmp_get_server_port());
 
 	maix_avc2flv_init(3000 * 1000 / 2);
 
@@ -759,13 +765,85 @@ static int rtmp_server_ongetduration(void* param, const char* app, const char* s
 	return 0;
 }
 
-void rtmp_server_vod_test(const char* flv)
+static int get_ip(char *hw, char ip[16])
+{
+    struct ifaddrs *ifaddr, *ifa;
+    int family, s;
+    char host[NI_MAXHOST];
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return -1;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) {
+            continue;
+        }
+
+        family = ifa->ifa_addr->sa_family;
+
+        if (family == AF_INET) {
+            s = getnameinfo(ifa->ifa_addr, (family == AF_INET) ? sizeof(struct sockaddr_in) :
+                            sizeof(struct sockaddr_in6), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+            if (s != 0) {
+                printf("getnameinfo() failed: %s\n", gai_strerror(s));
+                return -1;
+            }
+
+            if (!strcmp(ifa->ifa_name, hw)) {
+				strncpy(ip, host, 16);
+				freeifaddrs(ifaddr);
+				return 0;
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+	return -1;
+}
+
+char *rtmp_get_server_ip(void)
+{
+	return priv.ip;
+}
+
+int rtmp_get_server_port(void)
+{
+	return priv.port;
+}
+
+int rtmp_server_init(char *ip, int port, const char* flv)
 {
 	int r;
+	socket_t s;
 	struct rtmp_server_handler_t handler;
 
 	if (priv.rtmp_is_init)
-		return;
+		return 0;
+
+	char new_ip[16] = {0};
+	if (ip == NULL) {
+		// if (get_ip((char *)"eth0", new_ip) && get_ip((char *)"usb0", new_ip)) {
+		// 	strcpy(new_ip, "0.0.0.0");
+		// }
+		if (get_ip((char *)"eth0", new_ip) && get_ip((char *)"wlan0", new_ip) && get_ip((char *)"usb0", new_ip)) {
+			strcpy(new_ip, "0.0.0.0");
+		}
+	} else {
+		strcpy(new_ip, ip);
+	}
+
+	socket_init();
+
+	// create server socket
+	//s = socket_tcp_listen(0 /*AF_UNSPEC*/, new_ip, port, SOMAXCONN, 0, 0);
+	s = socket_tcp_listen_ipv4(NULL, port, SOMAXCONN);
+	if (socket_invalid == s)
+		return -1;
+
+	strcpy(priv.ip, new_ip);
+	priv.port = port;
 
 	memset(&handler, 0, sizeof(handler));
 	handler.send = rtmp_server_send;
@@ -785,17 +863,15 @@ void rtmp_server_vod_test(const char* flv)
 	priv.out_cnt = 0;
 #endif
 
-	socket_init();
-
-	socklen_t n;
-	struct sockaddr_storage ss;
-	socket_t s = socket_tcp_listen_ipv4(NULL, 1935, SOMAXCONN);
+	printf("rtmp://%s:%d/live/stream\n", rtmp_get_server_ip(), rtmp_get_server_port());
 
 	printf("%s: started\n", __func__);
 
 	priv.rtmp_is_init = 1;
 	exit_flag = 0;
 	while (!exit_flag) {
+		socklen_t n;
+		struct sockaddr_storage ss;
 		socket_t c = socket_accept_by_time(s, &ss, &n, 10);
 		if (socket_invalid == c) {
 			continue;
@@ -843,6 +919,8 @@ void rtmp_server_vod_test(const char* flv)
 	priv.rtmp_is_init = 0;
 
 	printf("%s: done\n", __func__);
+
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -856,7 +934,7 @@ int main(int argc, char *argv[])
 	signal(SIGINT, sig_handle);
 	signal(SIGTERM, sig_handle);
 
-	rtmp_server_vod_test(file);
+	rtmp_server_init(NULL, 1935, file);
 
 	return 0;
 }
