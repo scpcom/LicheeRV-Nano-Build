@@ -25,6 +25,10 @@ static int _nStreamID;
 static int _nVideoTimeStamp;
 static int _bHaveAudio, _bHaveVideo;
 
+static unsigned char *pItData = NULL;
+static unsigned int nItDataSize = 0;
+static unsigned int nItOffset = 0;
+
 static unsigned char *_pOutBuf = NULL;
 static unsigned int nOutBufMax = 0;
 static unsigned int nOutBufSize = 0;
@@ -279,9 +283,63 @@ int maix_avc2flv_deinit()
 		_pPPS = NULL;
 	}
 
+	_nSPSSize = 0;
+	_nPPSSize = 0;
+	_bWriteAVCSeqHeader = 0;
+
 	if (_pOutBuf) {
 		free(_pOutBuf);
 		_pOutBuf = NULL;
+	}
+
+	nOutBufMax = 0;
+	nOutBufSize = 0;
+
+	return AVC2FLV_SUCCESS;
+}
+
+int maix_avc2flv_prepare(uint8_t *data, int data_size)
+{
+	pItData = data;
+	nItDataSize = data_size;
+	nItOffset = 0;
+
+	return AVC2FLV_SUCCESS;
+}
+
+int maix_avc2flv_iterate(void **nalu, int *size)
+{
+	unsigned char *pOneNalu = NULL;
+	int nOneNaluSize = 0;
+
+	nOutBufSize = 0;
+
+	if (pItData == NULL || nItOffset + 4 >= nItDataSize) {
+		return AVC2FLV_FAILED;
+	}
+
+	if (GetOneNalu(pItData + nItOffset, nItDataSize - nItOffset, &pOneNalu, &nOneNaluSize) == 0) {
+		return AVC2FLV_FAILED;
+	}
+	if (pOneNalu == NULL || nOneNaluSize < 1) {
+		return AVC2FLV_FAILED;
+	}
+
+	if (ConvertH264((char *)pOneNalu, nOneNaluSize, _nVideoTimeStamp) == 0) {
+		return AVC2FLV_FAILED;
+	}
+
+	nItOffset += nOneNaluSize;
+
+	if (nOutBufSize > 4 && _pOutBuf[4] != 0x67 && _pOutBuf[4] != 0x68)
+	{
+		_nVideoTimeStamp += 33;
+	}
+	if (nalu) {
+		*nalu = _pOutBuf;
+	}
+	if (size) {
+		*size = nOutBufSize;
 	}
 
 	return AVC2FLV_SUCCESS;
@@ -294,25 +352,9 @@ int maix_avc2flv(void *nalu, int nalu_size, uint32_t pts, uint32_t dts, uint8_t 
 	UNUSED(dts);
 	nOutBufSize = 0;
 
-	if (nalu == NULL && nalu_size == 0)
+	if (nalu == NULL || nalu_size == 0)
 	{
-		if (_pSPS == NULL || _pPPS == NULL)
-		{
-			_bHaveAudio = 0;
-			_bHaveVideo = 1;
-
-			MakeFlvHeader(_FlvHeader);
-		} else {
-			free(_pSPS);
-			_pSPS = NULL;
-			free(_pPPS);
-			_pPPS = NULL;
-
-			if (_bHaveVideo != 0)
-				WriteH264EndofSeq();
-		}
-
-		goto out;
+		return AVC2FLV_FAILED;
 	}
 
 	while (1)
@@ -329,15 +371,56 @@ int maix_avc2flv(void *nalu, int nalu_size, uint32_t pts, uint32_t dts, uint8_t 
 			break;
 	}
 
-out:
+	if (nOutBufSize < 1) {
+		return AVC2FLV_FAILED;
+	}
 	if (flv) {
 		*flv = _pOutBuf;
 	}
 	if (flv_size) {
 		*flv_size = nOutBufSize;
 	}
+
+	return AVC2FLV_SUCCESS;
+}
+
+int maix_flv_get_tail(uint8_t **data, int *size)
+{
+	nOutBufSize = 0;
+
+	if (_bHaveVideo != 0)
+		WriteH264EndofSeq();
+
 	if (nOutBufSize < 1) {
 		return AVC2FLV_FAILED;
+	}
+	if (data) {
+		*data = _pOutBuf;
+	}
+	if (size) {
+		*size = nOutBufSize;
+	}
+
+	return AVC2FLV_SUCCESS;
+}
+
+int maix_flv_get_header(int audio, int video, uint8_t **data, int *size)
+{
+	nOutBufSize = 0;
+
+	_bHaveAudio = audio;
+	_bHaveVideo = video;
+
+	MakeFlvHeader(_FlvHeader);
+
+	if (nOutBufSize < 1) {
+		return AVC2FLV_FAILED;
+	}
+	if (data) {
+		*data = _pOutBuf;
+	}
+	if (size) {
+		*size = nOutBufSize;
 	}
 
 	return AVC2FLV_SUCCESS;
