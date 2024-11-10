@@ -39,7 +39,6 @@ TARGET = rtmp_server
 ifeq ($(CONFIG_ENABLE_SDK_ASAN), y)
 TARGET = rtmp_server_asan
 endif
-ORIGIN = /maixapp/$(TARGET)
 
 PKG_CONFIG_PATH = $(MW_PATH)/pkgconfig
 REQUIRES = cvi_common cvi_sample cvi_ive
@@ -56,9 +55,8 @@ EXTRA_CFLAGS = $(INCS) $(DEFS)
 EXTRA_LDFLAGS = $(LIBS) -lpthread -lm -lini
 
 MSK_LIBD = ../test_mmf/media_server-1.0.1/release.linux
-MCL_LIBD = ../test_mmf/maixcam_lib/release.linux
 
-LIBS += -L$(SDIR)/$(MSK_LIBD) -lvdec -L$(MCL_LIBD) -lhttp -lflv -lrtmp -lmov -lmpeg -lsdk -lavcodec -lavbsf
+LIBS += -L$(SDIR)/$(MSK_LIBD) -lvdec -lhttp -lflv -lrtmp -lmov -lmpeg -lsdk -lavcodec -lavbsf
 
 # IVE_SUPPORT = 1
 ifeq ($(IVE_SUPPORT), 1)
@@ -94,6 +92,7 @@ mmflibs:
 	@cp -p ../test_mmf/media_server-1.0.1/librtsp/release.linux/librtsp.a $(MSK_LIBD)/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maix_mmf/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/maixcam_lib/
+	@cp -p ../test_mmf/maixcam_lib/release.linux/libmaixcam_lib.so $(MW_LIB)/
 
 clean_mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C ../test_mmf/media_server-1.0.1/sdk/ clean
@@ -111,7 +110,7 @@ $(SDIR)/%.o: $(SDIR)/%.c
 	@echo [$(notdir $(CC))] $(notdir $@)
 
 $(TARGET): mmflibs $(COMM_OBJ) $(OBJS) $(ISP_OBJ) $(MW_LIB)/libvenc.a $(MW_LIB)/libsys.a
-	@$(CXX) -o $@ -Wl,-rpath=$(ORIGIN)/dl_lib -Wl,--start-group -lflv -lrtmp $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaixcam_lib $(filter-out -static, $(ELFFLAGS)) $(EXTRA_LDFLAGS)
+	@$(CXX) -o $@ -Wl,-rpath='$$ORIGIN/dl_lib' -Wl,-rpath=/mnt/system/usr/lib -Wl,-rpath=/mnt/system/usr/lib/3rd -Wl,--start-group -lflv -lrtmp $(OBJS) $(COMM_OBJS) -lsys $(MW_LIB)/libsys.a -Wl,--end-group -lmaixcam_lib $(filter-out -static, $(ELFFLAGS)) $(EXTRA_LDFLAGS)
 	@echo -e $(BLUE)[LINK]$(END)[$(notdir $(CXX))] $(notdir $@)
 
 clean: clean_mmflibs
