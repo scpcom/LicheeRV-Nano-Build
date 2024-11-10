@@ -90,6 +90,7 @@ mmflibs:
 	@cp -p media_server-1.0.1/librtsp/release.linux/librtsp.a $(MSK_LIBD)/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maixcam_lib/
+	@cp -p maixcam_lib/release.linux/libmaixcam_lib.so $(MW_LIB)/
 
 clean_mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/sdk/ clean

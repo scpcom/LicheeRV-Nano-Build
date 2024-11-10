@@ -1,6 +1,25 @@
 #ifndef __MAIX_MMF_HPP__
 #define __MAIX_MMF_HPP__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "cvi_buffer.h"
+#include "cvi_ae_comm.h"
+#include "cvi_awb_comm.h"
+#include "cvi_comm_isp.h"
+#include "cvi_comm_sns.h"
+#include "cvi_ae.h"
+#include "cvi_awb.h"
+#include "cvi_isp.h"
+#include "cvi_sns_ctrl.h"
+#include "cvi_ive.h"
+#include "cvi_sys.h"
+#include "sample_comm.h"
+#ifdef __cplusplus
+}
+#endif
+
 #define MMF_FUNC_SET_PARAM(method, num) ((uint32_t)((((uint32_t)method) << 24) | (num & 0xff)))
 #define MMF_FUNC_GET_PARAM_METHOD(x)    ((x >> 24) & 0xffffff)
 #define MMF_FUNC_GET_PARAM_NUM(x)       ((x & 0xff))
