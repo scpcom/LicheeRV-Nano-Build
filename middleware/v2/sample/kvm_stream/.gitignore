@@ -1,0 +1,8 @@
+*.o
+streameye
+test*
+.cproject
+.project
+.pydevproject
+*.mjpg
+images/
