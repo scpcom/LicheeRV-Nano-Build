@@ -3026,7 +3026,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 		return 0;
 	}
 
-	if ((int8_t)cfg->jpg_quality <= 50) {
+	if ((int8_t)cfg->jpg_quality < 50) {
 		printf("quality range is (50, 100]\n");
 		return -1;
 	}
@@ -3081,7 +3081,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 		printf("CVI_VENC_GetJpegParam failed with %#x\n", s32Ret);
 		goto out_chn;
 	}
-	stJpegParam.u32Qfactor = cfg->jpg_quality;
+	stJpegParam.u32Qfactor = (cfg->jpg_quality <= 50) ? 51 : (cfg->jpg_quality >= 100) ? 99 : cfg->jpg_quality;
 	s32Ret = CVI_VENC_SetJpegParam(ch, &stJpegParam);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("CVI_VENC_SetJpegParam failed with %#x\n", s32Ret);
