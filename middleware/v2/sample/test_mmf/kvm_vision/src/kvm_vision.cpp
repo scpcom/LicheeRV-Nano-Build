@@ -19,13 +19,14 @@
 
 // -------------------- mmf locals begin --------------------
 
-#define STREAM_SERVER_TYPE 4
-
 typedef struct {
+	uint8_t type;
+	uint8_t gop;
 	uint32_t width;
 	uint32_t height;
 	uint32_t fps;
 	uint32_t qlty;
+	uint32_t bitrate;
 	uint32_t res;
 } kvm_cfg_t;
 
@@ -57,6 +58,10 @@ static kvm_mmf_t kvm_mmf;
 typedef struct {
 	char out_data[INPUT_BUF_LEN];
 	int size;
+	int offset;
+	uint8_t new_gop;
+	unsigned char *p_sps_data, *p_pps_data;
+	int sps_size, pps_size;
 
 	uint64_t start;
 	uint64_t last_loop_us;
@@ -64,6 +69,7 @@ typedef struct {
 	uint64_t loop_count;
 	int last_vi_pop;
 	int last_size;
+	int chn_is_init;
 } priv_t;
 
 static priv_t priv;
@@ -81,6 +87,8 @@ static priv_t priv;
 
 #define MIN(a, b)                       ((a) < (b) ? (a) : (b))
 #define MAX(a, b)                       ((a) > (b) ? (a) : (b))
+
+#define USE_H264_ITERATE
 
 // -------------------- mmf helpers begin --------------------
 
@@ -255,29 +263,30 @@ static uint8_t *_prepare_image(int width, int height, int format)
 	return NULL;
 }
 
-#if 0
 int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 {
+	int cfg_qlty = (kvm_cfg.type == 2) ? 0 : qlty;
 	mmf_venc_cfg_t cfg = {
-		.type = STREAM_SERVER_TYPE,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
+		.type = kvm_cfg.type,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
 		.w = w,
 		.h = h,
 		.fmt = fmt,
-		.jpg_quality = qlty,
-		.gop = 0,	// unused
-		.intput_fps = 30,
-		.output_fps = 30,
-		.bitrate = 3000,
+		.jpg_quality = (uint8_t)cfg_qlty,
+		.gop = (kvm_cfg.type == 2) ? kvm_cfg.gop : 0,
+		.intput_fps = 60,
+		.output_fps = 60,
+		.bitrate = kvm_cfg.bitrate,
 	};
 
 	return mmf_add_venc_channel(ch, &cfg);
 }
-#endif
 
+#if 0
 int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 {
 	return mmf_enc_jpg_init(ch, w, h, fmt, qlty);
 }
+#endif
 
 static char* file_to_string(const char *file, size_t max_len)
 {
@@ -359,18 +368,34 @@ int kvm_cfg_read(void)
 {
 	kvm_cfg_t new_cfg;
 	int changed;
+	char *str_type;
 
 	memset(&new_cfg, 0, sizeof(new_cfg));
+	new_cfg.type = 4;
+	str_type = file_to_string("/kvmapp/kvm/type", 32);
+	if (str_type) {
+		new_cfg.type = strcmp(str_type, "h264") ? new_cfg.type : 2;
+		free(str_type);
+	}
+	new_cfg.gop = priv.new_gop;
 	new_cfg.width = file_to_uint("/kvmapp/kvm/width", 1920);
 	new_cfg.height = file_to_uint("/kvmapp/kvm/height", 1080);
 	new_cfg.fps = file_to_uint("/kvmapp/kvm/fps", 30);
 	new_cfg.qlty = file_to_uint("/kvmapp/kvm/qlty", 80);
 	new_cfg.res = file_to_uint("/kvmapp/kvm/res", 720);
+	if (new_cfg.type == 2 && new_cfg.qlty >= 500) {
+		new_cfg.bitrate = new_cfg.qlty;
+		new_cfg.qlty = kvm_cfg.qlty;
+	} else {
+		new_cfg.bitrate = kvm_cfg.bitrate;
+	}
 
-	changed = memcmp(&new_cfg, &kvm_cfg, sizeof(kvm_cfg));
+	changed = memcmp(&new_cfg, &kvm_cfg, sizeof(kvm_cfg)) || (!priv.chn_is_init);
 	if (!changed)
 		return changed;
 
+	if (new_cfg.type != kvm_cfg.type)
+		printf("kvm_cfg.type = %u\n", new_cfg.type);
 	if (new_cfg.width != kvm_cfg.width)
 		printf("kvm_cfg.width = %u\n", new_cfg.width);
 	if (new_cfg.height != kvm_cfg.height)
@@ -379,6 +404,8 @@ int kvm_cfg_read(void)
 		printf("kvm_cfg.fps = %u\n", new_cfg.fps);
 	if (new_cfg.qlty != kvm_cfg.qlty)
 		printf("kvm_cfg.qlty = %u\n", new_cfg.qlty);
+	if (new_cfg.bitrate != kvm_cfg.bitrate)
+		printf("kvm_cfg.bitrate = %u\n", new_cfg.bitrate);
 	if (new_cfg.res != kvm_cfg.res)
 		printf("kvm_cfg.res = %u\n", new_cfg.res);
 
@@ -431,6 +458,11 @@ int kvm_write_state(int state)
 
 int kvm_deinit_mmf_channels(kvm_mmf_t *mmf_cfg)
 {
+	if (!priv.chn_is_init)
+		return 0;
+
+	free_all_kvmv_data();
+
 	if (mmf_del_venc_channel(mmf_cfg->enc_ch)) {
 		printf("mmf_del_venc_channel failed\n");
 		return -1;
@@ -443,11 +475,16 @@ int kvm_deinit_mmf_channels(kvm_mmf_t *mmf_cfg)
 
 	mmf_del_vi_channel(mmf_cfg->vi_ch);
 
+	priv.chn_is_init = 0;
+
 	return 0;
 }
 
 int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 {
+	if (priv.chn_is_init)
+		return 0;
+
 	mmf_cfg->img_w = 2560; mmf_cfg->img_h = 1440; mmf_cfg->img_fps = 30;
 	mmf_cfg->img_fmt = PIXEL_FORMAT_NV21; mmf_cfg->img_qlty = 80;
 
@@ -495,6 +532,8 @@ int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 
 	mmf_vi_set_pop_timeout(100);
 
+	priv.chn_is_init = 1;
+
 	return 0;
 }
 
@@ -508,9 +547,173 @@ int kvm_reset_mmf_channels(kvm_mmf_t *mmf_cfg)
 
 // -------------------- mmf helpers end   --------------------
 
+// -------------------- h264 helpers begin --------------------
+
+static int _kvmv_h264_get_one_nalu(unsigned char *p_in_data, int in_size, unsigned char **pp_nalu, int *p_nalu_size)
+{
+	unsigned char *p = p_in_data;
+	int start_pos = 0, end_pos = 0;
+
+	if (in_size < 4)
+		return 0;
+
+	while (1)
+	{
+		if (p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
+		{
+			start_pos = p - p_in_data;
+			break;
+		}
+		p++;
+		if (p - p_in_data >= in_size - 4)
+			return 0;
+	}
+	p++;
+	while (1)
+	{
+		if (p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
+		{
+			end_pos = p - p_in_data;
+			break;
+		}
+		p++;
+		if (p - p_in_data >= in_size - 4)
+		{
+			end_pos = in_size;
+			break;
+		}
+	}
+	*p_nalu_size = end_pos - start_pos;
+	*pp_nalu = p_in_data + start_pos;
+
+	return 1;
+}
+
+static int _kvmv_h264_scan_one_nalu(char *p_nalu, int nalu_size)
+{
+	if (p_nalu == NULL || nalu_size <= 4)
+		return IMG_NOT_EXIST;
+
+	int nalu_type = p_nalu[4] & 0x1f;
+
+	if (nalu_type == 0x07)
+	{
+		if (priv.p_sps_data != NULL) free(priv.p_sps_data);
+		priv.p_sps_data = (unsigned char*)malloc(nalu_size);
+		priv.sps_size = nalu_size;
+		memcpy(priv.p_sps_data, p_nalu, nalu_size);
+
+		return IMG_H264_TYPE_SPS;
+	}
+	if (nalu_type == 0x08)
+	{
+		if (priv.p_pps_data != NULL) free(priv.p_pps_data);
+		priv.p_pps_data = (unsigned char*)malloc(nalu_size);
+		priv.pps_size = nalu_size;
+		memcpy(priv.p_pps_data, p_nalu, nalu_size);
+
+		return IMG_H264_TYPE_PPS;
+	}
+	if (nalu_type == 0x05)
+	{
+		return IMG_H264_TYPE_IF;
+	}
+
+	return IMG_H264_TYPE_PF;
+}
+
+#ifdef USE_H264_ITERATE
+static int _kvmv_h264_iterate(uint8_t **nalu, uint32_t *size)
+{
+	unsigned char *p_one_nalu_data = NULL;
+	int one_nalu_size = 0;
+	uint8_t *p_it_data = (uint8_t *)&priv.out_data;
+	uint32_t it_data_size = priv.size;
+
+	if (p_it_data == NULL || priv.offset + 4 >= it_data_size) {
+		return IMG_NOT_EXIST;
+	}
+
+	if (_kvmv_h264_get_one_nalu(p_it_data + priv.offset, it_data_size - priv.offset, &p_one_nalu_data, &one_nalu_size) == 0) {
+		return IMG_NOT_EXIST;
+	}
+	if (p_one_nalu_data == NULL || one_nalu_size < 1) {
+		return IMG_NOT_EXIST;
+	}
+
+	int ret = _kvmv_h264_scan_one_nalu((char *)p_one_nalu_data, one_nalu_size);
+	if (ret == IMG_NOT_EXIST) {
+		return IMG_NOT_EXIST;
+	}
+
+	priv.offset += one_nalu_size;
+
+	if (nalu) {
+		*nalu = p_one_nalu_data;
+	}
+	if (size) {
+		*size = one_nalu_size;
+	}
+
+	return ret;
+}
+
+#else
+static int _kvmv_h264_scan(void *nalu, int nalu_size)
+{
+	int offset = 0;
+	int got_sps = 0;
+	int got_pps = 0;
+	int got_idr = 0;
+
+	if (nalu == NULL || nalu_size == 0)
+	{
+		return IMG_NOT_EXIST;
+	}
+
+	while (1)
+	{
+		unsigned char *p_one_nalu_data = NULL;
+		int one_nalu_size = 0;
+		if (_kvmv_h264_get_one_nalu((uint8_t *)nalu + offset, nalu_size - offset, &p_one_nalu_data, &one_nalu_size) == 0)
+			break;
+
+		switch (_kvmv_h264_scan_one_nalu((char *)p_one_nalu_data, one_nalu_size))
+		{
+			case IMG_H264_TYPE_SPS:
+				got_sps = 1;
+				break;
+			case IMG_H264_TYPE_PPS:
+				got_pps = 1;
+				break;
+			case IMG_H264_TYPE_IF:
+				got_idr = 1;
+			default:
+				break;
+		}
+
+		offset += one_nalu_size;
+		if (offset + 4 >= nalu_size)
+			break;
+	}
+
+	return got_idr ? IMG_H264_TYPE_IF: IMG_H264_TYPE_PF;
+}
+#endif
+
+// -------------------- h264 helpers end   --------------------
+
 static int _kvmv_init(uint8_t _debug_info_en)
 {
 	UNUSED(_debug_info_en);
+
+	priv.offset = 0;
+	priv.size = 0;
+	priv.new_gop = 30;
+	priv.p_sps_data = NULL;
+	priv.p_pps_data = NULL;
+	priv.sps_size = 0;
+	priv.pps_size = 0;
 
 	// -------------------- mmf init begin --------------------
 	kvm_mmf_t *mmf_cfg = &kvm_mmf;
@@ -527,11 +730,12 @@ static int _kvmv_init(uint8_t _debug_info_en)
 	}
 
 	memset(&kvm_cfg, 0, sizeof(kvm_cfg));
+	kvm_cfg.qlty = 80;
+	kvm_cfg.bitrate = 3000;
 	kvm_cfg_read();
 
 	memset(&kvm_mmf, 0, sizeof(kvm_mmf));
-	if (kvm_init_mmf_channels(mmf_cfg))
-		return -1;
+	priv.chn_is_init = 0;
 
 	memset(&kvm_state, 0, sizeof(kvm_state));
 	kvm_write_now_fps(0);
@@ -564,6 +768,15 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 			if (0 != kvm_reset_mmf_channels(mmf_cfg))
 				return -2;
 		}
+
+#ifdef USE_H264_ITERATE
+		if (kvm_cfg.type == 2) {
+			int ret = _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
+			if (ret != IMG_NOT_EXIST) {
+				return ret;
+			}
+		}
+#endif
 
 		if (!priv.last_vi_pop) {
 			priv.start = _get_time_us();
@@ -654,22 +867,43 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 	}
 	// -------------------- mmf loop end   --------------------
 
+	priv.offset = 0;
+#ifdef USE_H264_ITERATE
+	if (kvm_cfg.type == 2)
+		return _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
+#endif
+
 	if (_pp_kvm_data)
 		*_pp_kvm_data = (uint8_t*)&priv.out_data;
 	if (_p_kvmv_data_size)
 		*_p_kvmv_data_size = priv.size;
+
+#ifndef USE_H264_ITERATE
+	if (kvm_cfg.type == 2)
+		return _kvmv_h264_scan(&priv.out_data, priv.size);
+#endif
 
 	return IMG_MJPEG_TYPE;
 }
 
 int kvmv_get_sps_frame(uint8_t** _pp_kvm_data, uint32_t* _p_kvmv_data_size)
 {
-	return -1;
+	if (_pp_kvm_data)
+		*_pp_kvm_data = priv.p_sps_data;
+	if (_p_kvmv_data_size)
+		*_p_kvmv_data_size = priv.sps_size;
+
+	return 0;
 }
 
 int kvmv_get_pps_frame(uint8_t** _pp_kvm_data, uint32_t* _p_kvmv_data_size)
 {
-	return -1;
+	if (_pp_kvm_data)
+		*_pp_kvm_data = priv.p_pps_data;
+	if (_p_kvmv_data_size)
+		*_p_kvmv_data_size = priv.pps_size;
+
+	return 0;
 }
 
 int free_kvmv_data(uint8_t ** _pp_kvm_data)
@@ -679,12 +913,21 @@ int free_kvmv_data(uint8_t ** _pp_kvm_data)
 
 void free_all_kvmv_data()
 {
-	//
+	priv.offset = 0;
+	priv.size = 0;
+
+	if (priv.p_sps_data != NULL) free(priv.p_sps_data);
+	if (priv.p_pps_data != NULL) free(priv.p_pps_data);
+
+	priv.p_sps_data = NULL;
+	priv.p_pps_data = NULL;
+	priv.sps_size = 0;
+	priv.pps_size = 0;
 }
 
 void set_h264_gop(uint8_t _gop)
 {
-	//
+	priv.new_gop = _gop;
 }
 
 void kvmv_deinit()
