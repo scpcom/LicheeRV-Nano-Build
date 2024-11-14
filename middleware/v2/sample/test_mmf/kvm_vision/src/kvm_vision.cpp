@@ -53,10 +53,10 @@ typedef struct {
 
 static kvm_mmf_t kvm_mmf;
 
-#define INPUT_BUF_LEN           1024 * 1024 /* 1MB */
+#define OUT_BUF_LEN           1024 * 1024 /* 1MB */
 
 typedef struct {
-	char out_data[INPUT_BUF_LEN];
+	char out_data[OUT_BUF_LEN];
 	int size;
 	int offset;
 	uint8_t new_gop;
@@ -833,7 +833,7 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 						memcpy(stream_buffer + copy_length, stream.data[i], stream.data_size[i]);
 						copy_length += stream.data_size[i];
 					}
-					if (!priv.size && INPUT_BUF_LEN >= copy_length) {
+					if (OUT_BUF_LEN >= copy_length) {
 						priv.last_size = copy_length;
 						priv.size = priv.last_size;
 						memcpy(&priv.out_data, stream_buffer, priv.size);
@@ -844,7 +844,7 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 					DEBUG("malloc failed!\r\n");
 				}
 			} else if (stream.count == 1) {
-				if (INPUT_BUF_LEN >= stream.data_size[0]) {
+				if (OUT_BUF_LEN >= stream.data_size[0]) {
 					priv.last_size = stream.data_size[0];
 					priv.size = priv.last_size;
 					memcpy(&priv.out_data, (uint8_t *)stream.data[0], priv.size);
