@@ -266,6 +266,7 @@ static uint8_t *_prepare_image(int width, int height, int format)
 int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 {
 	int cfg_qlty = (kvm_cfg.type == 2) ? 0 : qlty;
+	int cfg_bitrate = kvm_cfg.bitrate;
 	mmf_venc_cfg_t cfg = {
 		.type = kvm_cfg.type,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
 		.w = w,
@@ -275,7 +276,7 @@ int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 		.gop = (kvm_cfg.type == 2) ? kvm_cfg.gop : 0,
 		.intput_fps = 60,
 		.output_fps = 60,
-		.bitrate = kvm_cfg.bitrate,
+		.bitrate = cfg_bitrate,
 	};
 
 	return mmf_add_venc_channel(ch, &cfg);
@@ -630,7 +631,7 @@ static int _kvmv_h264_iterate(uint8_t **nalu, uint32_t *size)
 	uint8_t *p_it_data = (uint8_t *)&priv.out_data;
 	uint32_t it_data_size = priv.size;
 
-	if (p_it_data == NULL || priv.offset + 4 >= it_data_size) {
+	if (p_it_data == NULL || (uint32_t)priv.offset + 4 >= it_data_size) {
 		return IMG_NOT_EXIST;
 	}
 
@@ -716,8 +717,6 @@ static int _kvmv_init(uint8_t _debug_info_en)
 	priv.pps_size = 0;
 
 	// -------------------- mmf init begin --------------------
-	kvm_mmf_t *mmf_cfg = &kvm_mmf;
-
 	if (0 != mmf_init()) {
 		printf("mmf deinit\n");
 		return 0;
@@ -908,6 +907,20 @@ int kvmv_get_pps_frame(uint8_t** _pp_kvm_data, uint32_t* _p_kvmv_data_size)
 
 int free_kvmv_data(uint8_t ** _pp_kvm_data)
 {
+	uint8_t *p_out_data = (uint8_t*)&priv.out_data;
+
+	if (!_pp_kvm_data)
+		return 0;
+	if (!*_pp_kvm_data)
+		return 0;
+
+	if (*_pp_kvm_data >= p_out_data && *_pp_kvm_data < (p_out_data + OUT_BUF_LEN))
+	{
+		// no need to free static buffer
+		// free must be added if switching to dynamic allocation
+		*_pp_kvm_data = NULL;
+	}
+
 	return 0;
 }
 
