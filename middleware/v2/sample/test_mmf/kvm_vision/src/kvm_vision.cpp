@@ -66,9 +66,7 @@ typedef struct {
 	uint64_t start;
 	uint64_t last_loop_us;
 	uint64_t timestamp;
-	uint64_t loop_count;
 	int last_vi_pop;
-	int last_size;
 	int chn_is_init;
 } priv_t;
 
@@ -743,9 +741,7 @@ static int _kvmv_init(uint8_t _debug_info_en)
 	priv.start = _get_time_us();
 	priv.last_loop_us = priv.start;
 	priv.timestamp = 0;
-	priv.loop_count = 0;
 	priv.last_vi_pop = -1;
-	priv.last_size = 0;
 	// -------------------- mmf init end   --------------------
 	return 0;
 }
@@ -816,39 +812,20 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
 
 		priv.start = _get_time_us();
-		priv.size = priv.last_size;
-		{
+		if (stream.count > 0) {
 			int stream_size = 0;
 			for (int i = 0; i < stream.count; i ++) {
 				DEBUG("[%d] stream.data:%p stream.len:%d\n", i, stream.data[i], stream.data_size[i]);
 				stream_size += stream.data_size[i];
 			}
 
-			if (stream.count > 1) {
-				uint8_t *stream_buffer = (uint8_t *)malloc(stream_size);
-				if (stream_buffer) {
-					int copy_length = 0;
-					for (int i = 0; i < stream.count; i ++) {
-						memcpy(stream_buffer + copy_length, stream.data[i], stream.data_size[i]);
-						copy_length += stream.data_size[i];
-					}
-					if (OUT_BUF_LEN >= copy_length) {
-						priv.last_size = copy_length;
-						priv.size = priv.last_size;
-						memcpy(&priv.out_data, stream_buffer, priv.size);
-					}
-					priv.loop_count++;
-					free(stream_buffer);
-				} else {
-					DEBUG("malloc failed!\r\n");
+			if (OUT_BUF_LEN >= stream_size) {
+				int copy_length = 0;
+				for (int i = 0; i < stream.count; i ++) {
+					memcpy((uint8_t *)&priv.out_data + copy_length, stream.data[i], stream.data_size[i]);
+					copy_length += stream.data_size[i];
 				}
-			} else if (stream.count == 1) {
-				if (OUT_BUF_LEN >= stream.data_size[0]) {
-					priv.last_size = stream.data_size[0];
-					priv.size = priv.last_size;
-					memcpy(&priv.out_data, (uint8_t *)stream.data[0], priv.size);
-				}
-				priv.loop_count++;
+				priv.size = copy_length;
 			}
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
