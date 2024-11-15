@@ -34,12 +34,12 @@ DEPFLAGS = -MMD -MP -MF $(OUTPATH)/$(*F).d
 
 ifeq ($(RELEASE),1)
 	CFLAGS += -Wall -O2
-	CXXFLAGS += $(CFLAGS)
+	CXXFLAGS += $(subst -std=gnu11,-std=gnu++11, $(CFLAGS))
 	DEFINES += NDEBUG
 else
 	CFLAGS += -g -Wall
 #	CFLAGS += -fsanitize=address
-	CXXFLAGS += $(CFLAGS)
+	CXXFLAGS += $(subst -std=gnu11,-std=gnu++11, $(CFLAGS))
 	DEFINES += DEBUG _DEBUG
 endif
 
