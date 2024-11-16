@@ -773,12 +773,6 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		}
 #endif
 
-		if (!priv.last_vi_pop) {
-			priv.start = _get_time_us();
-			mmf_vi_frame_free(mmf_cfg->vi_ch);
-			DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
-		}
-
 		priv.start = _get_time_us();
 		int vi_ret = mmf_vi_frame_pop(mmf_cfg->vi_ch, &data, &data_size, &width, &height, &format);
 		if (vi_ret != priv.last_vi_pop) {
@@ -836,6 +830,12 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 			return -2;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
+
+		if (!priv.last_vi_pop) {
+			priv.start = _get_time_us();
+			mmf_vi_frame_free(mmf_cfg->vi_ch);
+			DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
+		}
 
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.last_loop_us);
 		priv.timestamp += (_get_time_us() - priv.last_loop_us) / 1000;
