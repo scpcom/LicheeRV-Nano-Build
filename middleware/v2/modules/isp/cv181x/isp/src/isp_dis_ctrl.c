@@ -74,7 +74,9 @@ CVI_S32 isp_dis_ctrl_init(VI_PIPE ViPipe)
 	runtime->process_updated = CVI_FALSE;
 	runtime->postprocess_updated = CVI_FALSE;
 	runtime->is_module_bypass = CVI_FALSE;
+#ifndef ISP_LIGHT
 	disMainInit(ViPipe);
+#endif
 
 	return ret;
 }
@@ -88,9 +90,11 @@ CVI_S32 isp_dis_ctrl_uninit(VI_PIPE ViPipe)
 	if (ViPipe > (DIS_SENSOR_NUM - 1))
 		return CVI_SUCCESS;
 
+#ifndef ISP_LIGHT
 	disMainUnInit(ViPipe);
 
 	disAlgoDestroy(ViPipe);
+#endif
 	return ret;
 }
 
@@ -365,7 +369,9 @@ static CVI_S32 isp_dis_ctrl_preprocess(VI_PIPE ViPipe, ISP_ALGO_RESULT_S *algoRe
 	if (!dis_supported)
 		return ret;
 
+#ifndef ISP_LIGHT
 	disAlgoCreate(ViPipe);
+#endif
 
 	runtime->process_updated = CVI_TRUE;
 	runtime->postprocess_updated = CVI_TRUE;
@@ -459,7 +465,9 @@ static CVI_S32 isp_dis_ctrl_process(VI_PIPE ViPipe)
 	if (runtime->process_updated == CVI_FALSE)
 		return ret;
 
+#ifndef ISP_LIGHT
 	ret = disMain(ViPipe, &runtime->inPtr, &runtime->outPtr);
+#endif
 
 	dis_debug_proc(&runtime->inPtr, &runtime->outPtr);
 

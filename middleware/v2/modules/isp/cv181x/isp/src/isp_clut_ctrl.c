@@ -59,7 +59,9 @@ CVI_S32 isp_clut_ctrl_init(VI_PIPE ViPipe)
 		return CVI_FAILURE;
 	}
 
+#ifndef ISP_LIGHT
 	isp_algo_clut_init(ViPipe);
+#endif
 
 	runtime->bTableUpdateFullMode = CVI_FALSE;
 
@@ -88,7 +90,11 @@ CVI_S32 isp_clut_ctrl_uninit(VI_PIPE ViPipe)
 	ISP_LOG_DEBUG("+\n");
 	CVI_S32 ret = CVI_SUCCESS;
 
+#ifndef ISP_LIGHT
 	isp_algo_clut_uninit(ViPipe);
+#else
+	UNUSED(ViPipe);
+#endif
 
 	return ret;
 }
@@ -229,10 +235,12 @@ static CVI_S32 isp_clut_ctrl_process(VI_PIPE ViPipe)
 	if (runtime->process_updated == CVI_FALSE)
 		return ret;
 
+#ifndef ISP_LIGHT
 	ret = isp_algo_clut_main(ViPipe,
 		(struct clut_param_in *)&runtime->clut_param_in,
 		(struct clut_param_out *)&runtime->clut_param_out
 	);
+#endif
 
 	runtime->process_updated = CVI_FALSE;
 

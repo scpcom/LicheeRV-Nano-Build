@@ -771,6 +771,7 @@ static CVI_S32 isp_get_paramstruct(VI_PIPE ViPipe, ISP_Parameter_Structures *pst
 }
 
 
+#ifndef ISP_LIGHT
 /**************************************************************************
  *   Json related APIs.
  **************************************************************************/
@@ -874,6 +875,7 @@ ERROR_HANDLER:
 	free(pisp_3a_parameter);
 	return ret;
 }
+#endif
 
 #if defined(__GNUC__) && defined(__riscv)
 #pragma GCC diagnostic pop

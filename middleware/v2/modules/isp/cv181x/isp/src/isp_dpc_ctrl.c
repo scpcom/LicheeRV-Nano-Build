@@ -515,7 +515,9 @@ static CVI_S32 ISP_GetRawBuffer(VI_PIPE ViPipe, CVI_U8 *bayerBuffer, BAYER_FORMA
 			}
 
 			crop_image(stride, &snsCropInfo, ptr, pCropImg, 1.5);
+#ifndef ISP_LIGHT
 			Bayer_12bit_2_16bit(pCropImg, (CVI_U16 *)bayerBuffer, cropWidth, cropHeight, cropWidth);
+#endif
 			free(pCropImg); pCropImg = NULL;
 		} else if (stVideoFrame.stVFrame.enCompressMode == COMPRESS_MODE_TILE) {
 			RAW_INFO rawInfo = {0};
@@ -533,12 +535,14 @@ static CVI_S32 ISP_GetRawBuffer(VI_PIPE ViPipe, CVI_U8 *bayerBuffer, BAYER_FORMA
 				return CVI_FAILURE;
 			}
 
+#ifndef ISP_LIGHT
 			if (decoderRaw(rawInfo, pDecImg) != CVI_SUCCESS) {
 				ISP_LOG_ERR("decoderRaw err\n");
 				CVI_VI_ReleasePipeFrame(ViPipe, &stVideoFrame);
 				free(ptr);
 				return CVI_FAILURE;
 			}
+#endif
 			crop_image(rawInfo.width * 2, &snsCropInfo, pDecImg, bayerBuffer, 2);
 			free(pDecImg); pDecImg = NULL;
 		} else {
@@ -693,7 +697,9 @@ static CVI_S32 ISP_SetDPCalibrate(VI_PIPE ViPipe, const ISP_DP_CALIB_ATTR_S *pst
 				.table_size = 0,
 			};
 
+#ifndef ISP_LIGHT
 			DPC_Calib(&input, &output);
+#endif
 
 			for (CVI_U32 i = 0; i < output.table_size; ++i) {
 				for (CVI_U32 j = 0; j < STATIC_DP_COUNT_MAX; ++j) {

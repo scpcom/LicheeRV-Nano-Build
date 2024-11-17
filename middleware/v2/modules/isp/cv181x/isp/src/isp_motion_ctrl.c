@@ -191,6 +191,7 @@ static CVI_S32 isp_motion_ctrl_process(VI_PIPE ViPipe)
 	if (runtime->process_updated == CVI_FALSE)
 		return ret;
 
+#ifndef ISP_LIGHT
 	//ALGO
 	isp_algo_motion_main(
 		(struct motion_param_in *)&runtime->motion_param_in,
@@ -198,6 +199,7 @@ static CVI_S32 isp_motion_ctrl_process(VI_PIPE ViPipe)
 
 //	printf("motionLevel : %d, FrameCnt : %d\n",
 //		runtime->motion_param_out.motionLevel, runtime->motion_param_out.frameCnt);
+#endif
 
 	runtime->process_updated = CVI_FALSE;
 
