@@ -1,3 +1,4 @@
+#ifndef DISABLE_PQBIN_JSON
 #include <string.h>
 #include "vo_json_struct.h"
 
@@ -23,4 +24,4 @@ void VO_BIN_INFO_S_JSON(int r_w_flag, JSON *j, char *key, VO_BIN_INFO_S *data)
 
 	JSON_END(r_w_flag);
 }
-
+#endif
