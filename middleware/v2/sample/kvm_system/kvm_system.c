@@ -504,10 +504,18 @@ oled_disable:
 
 void show_info_on_oled(void)
 {
+	char *str_type;
+	int kvm_type = 4;
 	int olde_fb = priv.oled_fb;
 
 	if (olde_fb < 0)
 		return;
+
+	str_type = file_to_string("/kvmapp/kvm/type", 32);
+	if (str_type) {
+		kvm_type = strcmp(str_type, "h264") ? kvm_type : 2;
+		free(str_type);
+	}
 
 	priv.pos_y = 0;
 	if(priv.size_y==8) priv.size_x = 6;
@@ -519,7 +527,8 @@ void show_info_on_oled(void)
 	show_string_on_oled_from_file(olde_fb, "|RES:", "%sP", "/kvmapp/kvm/res");
 	show_string_on_oled_from_file(olde_fb, "|TYPE:", "%s", "/kvmapp/kvm/type");
 	show_string_on_oled_from_file(olde_fb, "|STREAM:", "%s FPS", "/kvmapp/kvm/now_fps");
-	show_string_on_oled_from_file(olde_fb, "|QUALITY:", "%s %%", "/kvmapp/kvm/qlty");
+	show_string_on_oled_from_file(olde_fb, "|QUALITY:", (kvm_type == 2) ? "%s kbps" : "%s %%",
+						"/kvmapp/kvm/qlty");
 }
 
 void show_info_close_oled()
