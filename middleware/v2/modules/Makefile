@@ -5,7 +5,7 @@ endif
 
 .PHONY: all clean $(MODULES)
 
-MODULES = sys bin vpu audio mipi_tx venc vdec misc ive osdc isp
+MODULES = dummy isp_light sys bin vpu audio mipi_tx venc vdec misc ive osdc isp
 
 all:
 	@echo "########################################################################################################"
