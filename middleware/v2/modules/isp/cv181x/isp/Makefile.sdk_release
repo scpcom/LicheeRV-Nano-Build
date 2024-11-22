@@ -23,6 +23,8 @@ else ifeq ($(CHIP_ARCH), CV182X)
 	LOCAL_CFLAGS += -DCHIP_ARCH_CV182X
 else ifeq ($(CHIP_ARCH), CV181X)
 	LOCAL_CFLAGS += -DCHIP_ARCH_CV181X
+else ifeq ($(CHIP_ARCH), SG200X)
+	LOCAL_CFLAGS += -DCHIP_ARCH_CV181X
 else
 	$(error Un-support SOC Architecture)
 endif

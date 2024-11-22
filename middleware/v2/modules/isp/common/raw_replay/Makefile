@@ -22,6 +22,9 @@ else ifeq ($(CHIP_ARCH), CV182X)
 else ifeq ($(CHIP_ARCH), CV181X)
 	INCS += -I$(ISP_BASE_PATH)/isp/inc
 	DEFS += -DCHIP_ARCH_CV181X
+else ifeq ($(CHIP_ARCH), SG200X)
+	INCS += -I$(ISP_BASE_PATH)/isp/inc
+	DEFS += -DCHIP_ARCH_CV181X
 else ifeq ($(CHIP_ARCH), CV180X)
 	INCS += -I$(ISP_BASE_PATH)/isp/inc
 	DEFS += -DCHIP_ARCH_CV180X
