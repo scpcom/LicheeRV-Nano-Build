@@ -61,6 +61,11 @@ NANOKVM_SG200X_UNUSED_LIBS = \
 	libdnvqe.so \
 	libtinyalsa.so
 
+NANOKVM_SG200X_DUMMY_LIBS = \
+	libae.so \
+	libaf.so \
+	libawb.so
+
 define NANOKVM_SG200X_EXTRACT_CMDS
 	$(UNZIP) -d $(@D) \
 		$(NANOKVM_SG200X_DL_DIR)/$(NANOKVM_SG200X_SOURCE)
@@ -101,6 +106,30 @@ define NANOKVM_SG200X_INSTALL_TARGET_CMDS
 			ln -s libmisc.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
 		fi ; \
 	done
+	if [ -e ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/lib/libcvi_dummy.so ]; then \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/lib/libcvi_dummy.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
+		for l in $(NANOKVM_SG200X_DUMMY_LIBS) ; do \
+			rm -f $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+			ln -s libcvi_dummy.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+		done ; \
+	fi
+	if [ -e ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/lib/libcvi_bin_light.so -a \
+	     -e ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/lib/libisp_light.so ]; then \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/lib/libcvi_bin_light.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
+		for l in libcvi_bin.so ; do \
+			rm -f $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+			ln -s libcvi_bin_light.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+		done ; \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/lib/libisp_light.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
+		for l in libcvi_bin_isp.so libisp.so ; do \
+			rm -f $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+			ln -s libisp_light.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+		done ; \
+		for l in libisp_algo.so ; do \
+			rm -f $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+			ln -s libmisc.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/$$l ; \
+		done ; \
+	fi
 	if [ -e ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_STREAM) ]; then \
 		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_STREAM) $(TARGET_DIR)/kvmapp/kvm_system/ ; \
 	fi
@@ -119,6 +148,8 @@ define NANOKVM_SG200X_INSTALL_TARGET_CMDS
 	fi
 	if [ -e $(TARGET_DIR)/kvmapp/server/dl_lib/libkvm.so ]; then \
 		rm -rf $(TARGET_DIR)/kvmapp/kvm_stream/ ; \
+		rm -rf $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
+		mkdir -pv $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
 	fi
 	rm -f $(TARGET_DIR)/kvmapp/system/ko/*.ko
 	if [ "X$(BR2_PACKAGE_TAILSCALE_RISCV64)" != "Xy" ]; then \

@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-NANOKVM_SERVER_VERSION = 74a303bd5cbb58f9d8ddd81abaaf4919dbbfb71b
+NANOKVM_SERVER_VERSION = a0f0699cdca848af6229947f119bcc9a11c7adc1
 NANOKVM_SERVER_SITE = $(call github,sipeed,NanoKVM,$(NANOKVM_SERVER_VERSION))
 
 NANOKVM_SERVER_DEPENDENCIES = host-go host-nodejs host-python3 opencv4
@@ -70,6 +70,11 @@ NANOKVM_SERVER_UNUSED_LIBS = \
 	libdnvqe.so \
 	libtinyalsa.so
 
+NANOKVM_SERVER_DUMMY_LIBS = \
+	libae.so \
+	libaf.so \
+	libawb.so
+
 # todo: build kvm_stream and kvm_system from source
 define NANOKVM_SERVER_BUILD_CMDS
 	mkdir -pv $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/
@@ -89,6 +94,30 @@ define NANOKVM_SERVER_BUILD_CMDS
 		rm -f $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
 		ln -s libmisc.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
 	done
+	if [ -e ${@D}/$(NANOKVM_SERVER_EXT_MIDDLEWARE)/lib/libcvi_dummy.so ]; then \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SERVER_EXT_MIDDLEWARE)/lib/libcvi_dummy.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/ ; \
+		for l in $(NANOKVM_SERVER_DUMMY_LIBS) ; do \
+			rm -f $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+			ln -s libcvi_dummy.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+		done ; \
+	fi
+	if [ -e ${@D}/$(NANOKVM_SERVER_EXT_MIDDLEWARE)/lib/libcvi_bin_light.so -a \
+	     -e ${@D}/$(NANOKVM_SERVER_EXT_MIDDLEWARE)/lib/libisp_light.so ]; then \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SERVER_EXT_MIDDLEWARE)/lib/libcvi_bin_light.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/ ; \
+		for l in libcvi_bin.so ; do \
+			rm -f $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+			ln -s libcvi_bin_light.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+		done ; \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(NANOKVM_SERVER_EXT_MIDDLEWARE)/lib/libisp_light.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/ ; \
+		for l in libcvi_bin_isp.so libisp.so ; do \
+			rm -f $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+			ln -s libisp_light.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+		done ; \
+		for l in libisp_algo.so ; do \
+			rm -f $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+			ln -s libmisc.so $(@D)/$(NANOKVM_SERVER_GOMOD)/dl_lib/$$l ; \
+		done ; \
+	fi
 	cd $(@D)/$(NANOKVM_SERVER_GOMOD) ; \
 	GOPROXY=direct $(GO_BIN) mod tidy
 	cd $(@D)/$(NANOKVM_SERVER_GOMOD) ; \
