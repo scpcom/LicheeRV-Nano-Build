@@ -1763,10 +1763,8 @@ static int _test_venc_h265(void)
 		filelen = img_w * img_h * 3;
 	else
 		filelen = img_w * img_h * 3 / 2;
-	int show_w = 552, show_h = 368;
 
 	DEBUG("in w:%d h:%d fmt:%d\r\n", img_w, img_h, img_fmt);
-	DEBUG("out w:%d h:%d fmt:%d\r\n", show_w, show_h, img_fmt);
 #endif
 
 	mmf_init();
@@ -1876,10 +1874,8 @@ static int _test_vi_venc_h265(void)
 		filelen = img_w * img_h * 3;
 	else
 		filelen = img_w * img_h * 3 / 2;
-	int show_w = 552, show_h = 368;
 
 	DEBUG("in w:%d h:%d fmt:%d\r\n", img_w, img_h, img_fmt);
-	DEBUG("out w:%d h:%d fmt:%d\r\n", show_w, show_h, img_fmt);
 #endif
 
 	mmf_init();
@@ -2018,10 +2014,8 @@ static int _test_vi_venc_h264(void)
 		filelen = img_w * img_h * 3;
 	else
 		filelen = img_w * img_h * 3 / 2;
-	int show_w = 552, show_h = 368;
 
 	DEBUG("in w:%d h:%d fmt:%d\r\n", img_w, img_h, img_fmt);
-	DEBUG("out w:%d h:%d fmt:%d\r\n", show_w, show_h, img_fmt);
 #endif
 
 	mmf_init();
