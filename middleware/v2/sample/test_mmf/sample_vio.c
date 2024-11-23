@@ -259,7 +259,7 @@ void OLED_ShowNum(int _fb, uint8_t x, uint8_t y, uint32_t num, uint8_t len, uint
 }
 
 //显示一个字符号串
-void OLED_ShowString(int _fb, uint8_t x, uint8_t y, uint8_t *chr, uint8_t sizey)
+void OLED_ShowString(int _fb, uint8_t x, uint8_t y, char *chr, uint8_t sizey)
 {
 	uint8_t j=0;
 	while (chr[j]!='\0')
@@ -343,7 +343,7 @@ int OLED_Init(int _fb)
 	return ret;
 }
 
-void OLED_ShowStringtoend(int _fb, uint8_t x, uint8_t y, uint8_t *chr, uint8_t sizey, uint8_t end)
+void OLED_ShowStringtoend(int _fb, uint8_t x, uint8_t y, char *chr, uint8_t sizey, uint8_t end)
 {
 	uint8_t j=0;
 	while (chr[j] != end)
@@ -354,7 +354,7 @@ void OLED_ShowStringtoend(int _fb, uint8_t x, uint8_t y, uint8_t *chr, uint8_t s
 	}
 }
 
-void show_ip_on_oled(uint8_t *chr)
+void show_ip_on_oled(char *chr)
 {
 	int ret;
 	int olde_fb;
@@ -2741,7 +2741,7 @@ static int _test_vi_region_venc_h265_rtsp(void)
 
 	printf("rtsp://%s:%d/live\n", rtsp_get_server_ip(), rtsp_get_server_port());
 
-	uint8_t ipdata[30];
+	char ipdata[30];
 	sprintf(ipdata, "rtsp://%s:%d/live\n", rtsp_get_server_ip(), rtsp_get_server_port());
 	int fd = -1;
 	remove("/root/rtsp_ip_addr.txt");
@@ -2937,7 +2937,7 @@ _exit:
 
 static int _test_i2c_oled(void)
 {
-	uint8_t * chat_str = "rtsp://xxx.xxx.xxx.xxx:8554/live";
+	char * chat_str = "rtsp://xxx.xxx.xxx.xxx:8554/live";
 
 	show_ip_on_oled(chat_str);
 	return 0;
