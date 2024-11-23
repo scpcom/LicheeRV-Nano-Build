@@ -1298,19 +1298,18 @@ static int _test_venc_jpg(void)
 	signal(SIGINT, sig_handle);
 	signal(SIGTERM, sig_handle);
 
-	uint8_t *filebuf = NULL;
-	uint32_t filelen;
-	(void)filelen;
-
 #if 1
 	int img_w = 2560, img_h = 1440, fit = 0, img_fmt = PIXEL_FORMAT_NV21;	//PIXEL_FORMAT_NV21 or PIXEL_FORMAT_RGB_888
 	// int img_w = 640, img_h = 480, fit = 0, img_fmt = PIXEL_FORMAT_RGB_888;	//PIXEL_FORMAT_NV21 or PIXEL_FORMAT_RGB_888
 
-	filebuf = _prepare_image(img_w, img_h, img_fmt);
+#if 0
+	uint8_t *filebuf = _prepare_image(img_w, img_h, img_fmt);
+	uint32_t filelen;
 	if (img_fmt == PIXEL_FORMAT_RGB_888)
 		filelen = img_w * img_h * 3;
 	else
 		filelen = img_w * img_h * 3 / 2;
+#endif
 	int show_w = 552, show_h = 368;
 
 	DEBUG("in w:%d h:%d fmt:%d\r\n", img_w, img_h, img_fmt);
