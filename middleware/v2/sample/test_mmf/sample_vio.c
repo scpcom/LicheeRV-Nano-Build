@@ -2038,7 +2038,7 @@ static int _test_vi_venc_h264(void)
 			}
 			VENC_CHN_ATTR_S stVencChnAttr;
 			memset(&stVencChnAttr, 0, sizeof(VENC_CHN_ATTR_S));
-			stVencChnAttr.stVencAttr.enType = PT_H265;
+			stVencChnAttr.stVencAttr.enType = PT_H264;
 			stVencChnAttr.stVencAttr.u32MaxPicWidth = w;
 			stVencChnAttr.stVencAttr.u32MaxPicHeight = h;
 			stVencChnAttr.stVencAttr.u32BufSize = 1024 * 1024;	// 1024Kb
@@ -2049,13 +2049,13 @@ static int _test_vi_venc_h264(void)
 			stVencChnAttr.stVencAttr.bIsoSendFrmEn = CVI_TRUE;
 			stVencChnAttr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
 			stVencChnAttr.stGopAttr.stNormalP.s32IPQpDelta = 2;
-			stVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
-			stVencChnAttr.stRcAttr.stH265Cbr.u32Gop = 50;
-			stVencChnAttr.stRcAttr.stH265Cbr.u32StatTime = 2;
-			stVencChnAttr.stRcAttr.stH265Cbr.u32SrcFrameRate = 30;
-			stVencChnAttr.stRcAttr.stH265Cbr.fr32DstFrameRate = 30;
-			stVencChnAttr.stRcAttr.stH265Cbr.u32BitRate = 3000;
-			stVencChnAttr.stRcAttr.stH265Cbr.bVariFpsEn = 0;
+			stVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
+			stVencChnAttr.stRcAttr.stH264Cbr.u32Gop = 50;
+			stVencChnAttr.stRcAttr.stH264Cbr.u32StatTime = 2;
+			stVencChnAttr.stRcAttr.stH264Cbr.u32SrcFrameRate = 30;
+			stVencChnAttr.stRcAttr.stH264Cbr.fr32DstFrameRate = 30;
+			stVencChnAttr.stRcAttr.stH264Cbr.u32BitRate = 3000;
+			stVencChnAttr.stRcAttr.stH264Cbr.bVariFpsEn = 0;
 			s32Ret = CVI_VENC_CreateChn(ch, &stVencChnAttr);
 			if (s32Ret != CVI_SUCCESS) {
 				printf("CVI_VENC_CreateChn [%d] failed with %d\n", ch, s32Ret);
@@ -2071,53 +2071,54 @@ static int _test_vi_venc_h264(void)
 			}
 
 			{
-				VENC_H265_TRANS_S h265Trans = {0};
-				s32Ret = CVI_VENC_GetH265Trans(ch, &h265Trans);
+				VENC_H264_TRANS_S h264Trans = {0};
+				s32Ret = CVI_VENC_GetH264Trans(ch, &h264Trans);
 				if (s32Ret != CVI_SUCCESS) {
-					printf("CVI_VENC_GetH265Trans failed with %d\n", s32Ret);
+					printf("CVI_VENC_GetH264Trans failed with %d\n", s32Ret);
 					return s32Ret;
 				}
-				h265Trans.cb_qp_offset = 0;
-				h265Trans.cr_qp_offset = 0;
-				s32Ret = CVI_VENC_SetH265Trans(ch, &h265Trans);
+				//h264Trans.cb_qp_offset = 0;
+				//h264Trans.cr_qp_offset = 0;
+				h264Trans.chroma_qp_index_offset = 0;
+				s32Ret = CVI_VENC_SetH264Trans(ch, &h264Trans);
 				if (s32Ret != CVI_SUCCESS) {
-					printf("CVI_VENC_SetH265Trans failed with %d\n", s32Ret);
+					printf("CVI_VENC_SetH264Trans failed with %d\n", s32Ret);
 					return s32Ret;
 				}
 			}
 
 			{
-				VENC_H265_VUI_S h265Vui = {0};
-				s32Ret = CVI_VENC_GetH265Vui(ch, &h265Vui);
+				VENC_H264_VUI_S h264Vui = {0};
+				s32Ret = CVI_VENC_GetH264Vui(ch, &h264Vui);
 				if (s32Ret != CVI_SUCCESS) {
-					printf("CVI_VENC_GetH265Vui failed with %d\n", s32Ret);
+					printf("CVI_VENC_GetH264Vui failed with %d\n", s32Ret);
 					return s32Ret;
 				}
 
-				h265Vui.stVuiAspectRatio.aspect_ratio_info_present_flag = 0;
-				h265Vui.stVuiAspectRatio.aspect_ratio_idc = 1;
-				h265Vui.stVuiAspectRatio.overscan_info_present_flag = 0;
-				h265Vui.stVuiAspectRatio.overscan_appropriate_flag = 0;
-				h265Vui.stVuiAspectRatio.sar_width = 1;
-				h265Vui.stVuiAspectRatio.sar_height = 1;
-				h265Vui.stVuiTimeInfo.timing_info_present_flag = 1;
-				h265Vui.stVuiTimeInfo.num_units_in_tick = 1;
-				h265Vui.stVuiTimeInfo.time_scale = 30;
-				h265Vui.stVuiTimeInfo.num_ticks_poc_diff_one_minus1 = 1;
-				h265Vui.stVuiVideoSignal.video_signal_type_present_flag = 0;
-				h265Vui.stVuiVideoSignal.video_format = 5;
-				h265Vui.stVuiVideoSignal.video_full_range_flag = 0;
-				h265Vui.stVuiVideoSignal.colour_description_present_flag = 0;
-				h265Vui.stVuiVideoSignal.colour_primaries = 2;
-				h265Vui.stVuiVideoSignal.transfer_characteristics = 2;
-				h265Vui.stVuiVideoSignal.matrix_coefficients = 2;
-				h265Vui.stVuiBitstreamRestric.bitstream_restriction_flag = 0;
+				h264Vui.stVuiAspectRatio.aspect_ratio_info_present_flag = 0;
+				h264Vui.stVuiAspectRatio.aspect_ratio_idc = 1;
+				h264Vui.stVuiAspectRatio.overscan_info_present_flag = 0;
+				h264Vui.stVuiAspectRatio.overscan_appropriate_flag = 0;
+				h264Vui.stVuiAspectRatio.sar_width = 1;
+				h264Vui.stVuiAspectRatio.sar_height = 1;
+				h264Vui.stVuiTimeInfo.timing_info_present_flag = 1;
+				h264Vui.stVuiTimeInfo.num_units_in_tick = 1;
+				h264Vui.stVuiTimeInfo.time_scale = 30;
+				//h264Vui.stVuiTimeInfo.num_ticks_poc_diff_one_minus1 = 1;
+				h264Vui.stVuiVideoSignal.video_signal_type_present_flag = 0;
+				h264Vui.stVuiVideoSignal.video_format = 5;
+				h264Vui.stVuiVideoSignal.video_full_range_flag = 0;
+				h264Vui.stVuiVideoSignal.colour_description_present_flag = 0;
+				h264Vui.stVuiVideoSignal.colour_primaries = 2;
+				h264Vui.stVuiVideoSignal.transfer_characteristics = 2;
+				h264Vui.stVuiVideoSignal.matrix_coefficients = 2;
+				h264Vui.stVuiBitstreamRestric.bitstream_restriction_flag = 0;
 
-				// _mmf_dump_venc_h265_vui(&h265Vui);
+				// _mmf_dump_venc_h264_vui(&h264Vui);
 
-				s32Ret = CVI_VENC_SetH265Vui(ch, &h265Vui);
+				s32Ret = CVI_VENC_SetH264Vui(ch, &h264Vui);
 				if (s32Ret != CVI_SUCCESS) {
-					printf("CVI_VENC_SetH265Vui failed with %d\n", s32Ret);
+					printf("CVI_VENC_SetH264Vui failed with %d\n", s32Ret);
 					return s32Ret;
 				}
 			}
@@ -2131,12 +2132,12 @@ static int _test_vi_venc_h264(void)
 					return s32Ret;
 				}
 				stRcParam.s32FirstFrameStartQp = 35;
-				stRcParam.stParamH265Cbr.u32MinIprop = 1;
-				stRcParam.stParamH265Cbr.u32MaxIprop = 10;
-				stRcParam.stParamH265Cbr.u32MaxQp = 51;
-				stRcParam.stParamH265Cbr.u32MinQp = 20;
-				stRcParam.stParamH265Cbr.u32MaxIQp = 51;
-				stRcParam.stParamH265Cbr.u32MinIQp = 20;
+				stRcParam.stParamH264Cbr.u32MinIprop = 1;
+				stRcParam.stParamH264Cbr.u32MaxIprop = 10;
+				stRcParam.stParamH264Cbr.u32MaxQp = 51;
+				stRcParam.stParamH264Cbr.u32MinQp = 20;
+				stRcParam.stParamH264Cbr.u32MaxIQp = 51;
+				stRcParam.stParamH264Cbr.u32MinIQp = 20;
 
 				// _mmf_dump_venc_rc_param(&stRcParam);
 
@@ -2261,7 +2262,7 @@ static int _test_vi_venc_h264(void)
 						static int file_duration = 100;
 						{
 							if (fp == NULL) {
-								fp = fopen("venc_stream.h265", "wb");
+								fp = fopen("venc_stream.h264", "wb");
 								if (fp == NULL) {
 									printf("open file failed\n");
 									goto _release_venc;
