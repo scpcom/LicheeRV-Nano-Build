@@ -1355,7 +1355,7 @@ static int _test_venc_jpg(void)
 		// pop last push frame
 		uint8_t *data;
 		int data_size;
-		uint8_t *vi_data;
+		void *vi_data;
 		int vi_data_size, width, height, format;
 		if (0 != mmf_vi_frame_pop(vi_ch, &vi_data, &vi_data_size, &width, &height, &format)) {
 			fail_count++;
