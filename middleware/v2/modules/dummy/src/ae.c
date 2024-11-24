@@ -16,6 +16,7 @@
 #include "cvi_sns_ctrl.h"
 #include "cvi_ae.h"
 #include "cvi_isp.h"
+#include "3A_internal.h"
 
 CVI_S32 CVI_AE_Register(VI_PIPE ViPipe, ALG_LIB_S *pstAeLib)
 {
@@ -96,6 +97,12 @@ CVI_S32 CVI_ISP_QueryExposureInfo(VI_PIPE ViPipe, ISP_EXP_INFO_S *pstExpInfo)
 
 	memset(pstExpInfo, 0, sizeof(*pstExpInfo));
 
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_GetFrameID(VI_PIPE ViPipe, CVI_U32 *frameID)
+{
+	UNUSED(ViPipe);
 	return CVI_SUCCESS;
 }
 
@@ -222,6 +229,32 @@ CVI_S32 CVI_ISP_SetDcirisAttr(VI_PIPE ViPipe, const ISP_DCIRIS_ATTR_S *pstDciris
 }
 
 CVI_S32 CVI_ISP_GetDcirisAttr(VI_PIPE ViPipe, ISP_DCIRIS_ATTR_S *pstDcirisAttr)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+// 3A_internal.h
+
+CVI_S32 CVI_ISP_GetAELogBuf(VI_PIPE ViPipe, CVI_U8 *pBuf, CVI_U32 bufSize)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_GetAELogBufSize(VI_PIPE ViPipe, CVI_U32 *bufSize)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_AESetRawDumpFrameID(VI_PIPE ViPipe, CVI_U32 fid, CVI_U16 frmNum)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_AEGetRawReplayExpBuf(VI_PIPE ViPipe, CVI_U8 *buf, CVI_U32 *bufSize)
 {
 	UNUSED(ViPipe);
 	return CVI_SUCCESS;

@@ -14,6 +14,7 @@
 #include <linux/cvi_defines.h>
 #include "cvi_buffer.h"
 #include "cvi_awb.h"
+#include "3A_internal.h"
 
 CVI_S32 CVI_AWB_Register(VI_PIPE ViPipe, ALG_LIB_S *pstAwbLib)
 {
@@ -98,4 +99,23 @@ CVI_S32 CVI_ISP_GetWBCalibrationEx(VI_PIPE ViPipe, ISP_AWB_Calibration_Gain_S_EX
 {
 	UNUSED(ViPipe);
 	return CVI_SUCCESS;
+}
+
+// 3A_internal.h
+
+CVI_S32 CVI_ISP_GetAWBSnapLogBuf(VI_PIPE ViPipe, CVI_U8 *buf, CVI_U32 bufSize)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_GetAWBDbgBinBuf(VI_PIPE ViPipe, CVI_U8 *buf, CVI_U32 bufSize)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_GetAWBDbgBinSize(void)
+{
+	return 0;
 }
