@@ -21,11 +21,11 @@
 
 typedef struct {
 	uint8_t type;
-	uint8_t gop;
 	uint32_t width;
 	uint32_t height;
-	uint32_t fps;
 	uint32_t qlty;
+	uint8_t gop;
+	uint32_t fps;
 	uint32_t bitrate;
 	uint32_t res;
 } kvm_cfg_t;
@@ -52,6 +52,17 @@ typedef struct {
 } kvm_mmf_t;
 
 static kvm_mmf_t kvm_mmf;
+
+static kvm_cfg_t vis_cfg = {
+	.type = 0,
+	.width = 0,
+	.height = 0,
+	.qlty = 0,
+	.gop = 0,
+	.fps = 0,
+	.bitrate = 0,
+	.res = 0,
+};
 
 #define OUT_BUF_LEN           1024 * 1024 /* 1MB */
 
@@ -263,9 +274,15 @@ static uint8_t *_prepare_image(int width, int height, int format)
 	return NULL;
 }
 
+static inline int is_h26x_stream(uint8_t type)
+{
+	return (type == 1 || type == 2);
+}
+
 int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 {
-	int cfg_qlty = (kvm_cfg.type == 2) ? 0 : qlty;
+	int cfg_qlty = is_h26x_stream(kvm_cfg.type) ? 0 : qlty;
+	int cfg_gop = is_h26x_stream(kvm_cfg.type) ? kvm_cfg.gop : 0;
 	int cfg_bitrate = kvm_cfg.bitrate;
 	mmf_venc_cfg_t cfg = {
 		.type = kvm_cfg.type,  //1, h265, 2, h264, 3, mjpeg, 4, jpeg
@@ -273,7 +290,7 @@ int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 		.h = h,
 		.fmt = fmt,
 		.jpg_quality = (uint8_t)cfg_qlty,
-		.gop = (kvm_cfg.type == 2) ? kvm_cfg.gop : 0,
+		.gop = cfg_gop,
 		.intput_fps = 60,
 		.output_fps = 60,
 		.bitrate = cfg_bitrate,
@@ -384,7 +401,7 @@ int kvm_cfg_read(void)
 	new_cfg.fps = file_to_uint("/kvmapp/kvm/fps", 30);
 	new_cfg.qlty = file_to_uint("/kvmapp/kvm/qlty", 80);
 	new_cfg.res = file_to_uint("/kvmapp/kvm/res", 720);
-	if (new_cfg.type == 2 && new_cfg.qlty >= 500) {
+	if (is_h26x_stream(new_cfg.type) && new_cfg.qlty >= 500) {
 		new_cfg.bitrate = new_cfg.qlty;
 		new_cfg.qlty = kvm_cfg.qlty;
 	} else {
@@ -760,6 +777,37 @@ void kvmv_init(uint8_t _debug_info_en)
 	_kvmv_init(_debug_info_en);
 }
 
+static int _kvmv_read_cfg(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _qlty_bitrate)
+{
+	uint16_t _qlty = vis_cfg.qlty;
+	uint16_t _bitrate = vis_cfg.bitrate;
+
+	if (is_h26x_stream(_type) && _qlty_bitrate >= 500) {
+		_bitrate = _qlty_bitrate;
+	} else {
+		_qlty = _qlty_bitrate;
+	}
+
+	if (_type != vis_cfg.type)
+		printf("vis_cfg.type = %u\n", _type);
+	if (_width != vis_cfg.width)
+		printf("vis_cfg.width = %u\n", _width);
+	if (_height != vis_cfg.height)
+		printf("vis_cfg.height = %u\n", _height);
+	if (_qlty != vis_cfg.qlty)
+		printf("vis_cfg.qlty = %u\n", _qlty);
+	if (_bitrate != vis_cfg.bitrate)
+		printf("vis_cfg.bitrate = %u\n", _bitrate);
+
+	vis_cfg.width = _width;
+	vis_cfg.height = _height;
+	vis_cfg.type = _type;
+	vis_cfg.qlty = _qlty;
+	vis_cfg.bitrate = _bitrate;
+
+	return 0;
+}
+
 int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _qlty, uint8_t** _pp_kvm_data, uint32_t* _p_kvmv_data_size)
 {
 	// -------------------- mmf loop begin --------------------
@@ -774,6 +822,8 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 
 		priv.is_running = 1;
 
+		_kvmv_read_cfg(_width, _height, _type, _qlty);
+
 		if (kvm_cfg_read()) {
 			if (0 != kvm_reset_mmf_channels(mmf_cfg)) {
 				priv.is_running = 0;
@@ -782,7 +832,7 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		}
 
 #ifdef USE_H264_ITERATE
-		if (kvm_cfg.type == 2) {
+		if (is_h26x_stream(kvm_cfg.type)) {
 			int ret = _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
 			if (ret != IMG_NOT_EXIST) {
 				priv.is_running = 0;
@@ -866,7 +916,7 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 
 	priv.offset = 0;
 #ifdef USE_H264_ITERATE
-	if (kvm_cfg.type == 2) {
+	if (is_h26x_stream(kvm_cfg.type)) {
 		int ret = _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
 		priv.is_running = 0;
 		return ret;
@@ -879,7 +929,7 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		*_p_kvmv_data_size = priv.size;
 
 #ifndef USE_H264_ITERATE
-	if (kvm_cfg.type == 2) {
+	if (is_h26x_stream(kvm_cfg.type)) {
 		int ret = _kvmv_h264_scan(&priv.out_data, priv.size);
 		priv.is_running = 0;
 		return ret;
