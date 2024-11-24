@@ -248,6 +248,41 @@ CVI_S32 CVI_ISP_GetAELogBufSize(VI_PIPE ViPipe, CVI_U32 *bufSize)
 	return CVI_SUCCESS;
 }
 
+CVI_S32 CVI_ISP_GetAEBinBuf(VI_PIPE ViPipe, CVI_U8 *pBuf, CVI_U32 bufSize)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_GetAEBinBufSize(VI_PIPE ViPipe, CVI_U32 *bufSize)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_AEBracketingStart(VI_PIPE ViPipe)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_AEBracketingSetExpsoure(VI_PIPE ViPipe, CVI_S16 leEvX10, CVI_S16 seEvX10)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_AEBracketingSetSimple(CVI_BOOL bEnable)
+{
+	return CVI_SUCCESS;
+}
+
+CVI_S32 CVI_ISP_AEBracketingFinish(VI_PIPE ViPipe)
+{
+	UNUSED(ViPipe);
+	return CVI_SUCCESS;
+}
+
 CVI_S32 CVI_ISP_AESetRawDumpFrameID(VI_PIPE ViPipe, CVI_U32 fid, CVI_U16 frmNum)
 {
 	UNUSED(ViPipe);
