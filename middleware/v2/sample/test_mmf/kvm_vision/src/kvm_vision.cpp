@@ -67,10 +67,12 @@ typedef struct {
 	uint64_t last_loop_us;
 	uint64_t timestamp;
 	int last_vi_pop;
+	int kvm_is_init;
 	int chn_is_init;
+	int is_running;
 } priv_t;
 
-static priv_t priv;
+static priv_t priv = { {0}, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // -------------------- mmf locals end   --------------------
 
@@ -706,6 +708,10 @@ static int _kvmv_init(uint8_t _debug_info_en)
 {
 	UNUSED(_debug_info_en);
 
+	if (priv.kvm_is_init) {
+		return 0;
+	}
+
 	priv.offset = 0;
 	priv.size = 0;
 	priv.new_gop = 30;
@@ -733,6 +739,7 @@ static int _kvmv_init(uint8_t _debug_info_en)
 
 	memset(&kvm_mmf, 0, sizeof(kvm_mmf));
 	priv.chn_is_init = 0;
+	priv.is_running = 0;
 
 	memset(&kvm_state, 0, sizeof(kvm_state));
 	kvm_write_now_fps(0);
@@ -743,6 +750,8 @@ static int _kvmv_init(uint8_t _debug_info_en)
 	priv.timestamp = 0;
 	priv.last_vi_pop = -1;
 	// -------------------- mmf init end   --------------------
+
+	priv.kvm_is_init = 1;
 	return 0;
 }
 
@@ -759,15 +768,24 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		void *data;
 		int data_size, width, height, format;
 
+		if (priv.is_running) {
+			return IMG_NOT_EXIST;
+		}
+
+		priv.is_running = 1;
+
 		if (kvm_cfg_read()) {
-			if (0 != kvm_reset_mmf_channels(mmf_cfg))
-				return -2;
+			if (0 != kvm_reset_mmf_channels(mmf_cfg)) {
+				priv.is_running = 0;
+				return IMG_VENC_ERROR;
+			}
 		}
 
 #ifdef USE_H264_ITERATE
 		if (kvm_cfg.type == 2) {
 			int ret = _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
 			if (ret != IMG_NOT_EXIST) {
+				priv.is_running = 0;
 				return ret;
 			}
 		}
@@ -792,7 +810,8 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		priv.start = _get_time_us();
 		if (mmf_venc_push(mmf_cfg->enc_ch, (uint8_t*)data, mmf_cfg->img_w, mmf_cfg->img_h, mmf_cfg->img_fmt)) {
 			printf("mmf_venc_push failed\n");
-			return -2;
+			priv.is_running = 0;
+			return IMG_VENC_ERROR;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
 
@@ -801,7 +820,8 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		stream.count = 0;
 		if (mmf_venc_pop(mmf_cfg->enc_ch, &stream)) {
 			printf("mmf_venc_pop failed\n");
-			return -2;
+			priv.is_running = 0;
+			return IMG_VENC_ERROR;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
 
@@ -827,7 +847,8 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		priv.start = _get_time_us();
 		if (mmf_venc_free(mmf_cfg->enc_ch)) {
 			printf("mmf_venc_free failed\n");
-			return -2;
+			priv.is_running = 0;
+			return IMG_VENC_ERROR;
 		}
 		DEBUG("use %ld us\r\n", _get_time_us() - priv.start);
 
@@ -845,8 +866,11 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 
 	priv.offset = 0;
 #ifdef USE_H264_ITERATE
-	if (kvm_cfg.type == 2)
-		return _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
+	if (kvm_cfg.type == 2) {
+		int ret = _kvmv_h264_iterate(_pp_kvm_data, _p_kvmv_data_size);
+		priv.is_running = 0;
+		return ret;
+	}
 #endif
 
 	if (_pp_kvm_data)
@@ -855,10 +879,14 @@ int kvmv_read_img(uint16_t _width, uint16_t _height, uint8_t _type, uint16_t _ql
 		*_p_kvmv_data_size = priv.size;
 
 #ifndef USE_H264_ITERATE
-	if (kvm_cfg.type == 2)
-		return _kvmv_h264_scan(&priv.out_data, priv.size);
+	if (kvm_cfg.type == 2) {
+		int ret = _kvmv_h264_scan(&priv.out_data, priv.size);
+		priv.is_running = 0;
+		return ret;
+	}
 #endif
 
+	priv.is_running = 0;
 	return IMG_MJPEG_TYPE;
 }
 
@@ -925,11 +953,19 @@ void kvmv_deinit()
 	//  ------------------- mmf deinit begin --------------------
 	kvm_mmf_t *mmf_cfg = &kvm_mmf;
 
+	if (!priv.kvm_is_init) {
+		return;
+	}
+	if (priv.is_running) {
+		return;
+	}
+
 	kvm_write_state(0);
 	kvm_write_now_fps(0);
 
-	if (0 != kvm_deinit_mmf_channels(mmf_cfg))
+	if (0 != kvm_deinit_mmf_channels(mmf_cfg)) {
 		return;
+	}
 
 	mmf_vi_deinit();
 
@@ -938,5 +974,6 @@ void kvmv_deinit()
 	}
 	// -------------------- mmf deinit end ----------------------
 
+	priv.kvm_is_init = 0;
 	INFO("bye!");
 }
