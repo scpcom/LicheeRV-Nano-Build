@@ -506,10 +506,13 @@ int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 	mmf_cfg->img_w = 2560; mmf_cfg->img_h = 1440; mmf_cfg->img_fps = 30;
 	mmf_cfg->img_fmt = PIXEL_FORMAT_NV21; mmf_cfg->img_qlty = 80;
 
+#if 0
 	char *sensor_name = mmf_get_sensor_name();
 	if (!strcmp(sensor_name, "lt6911")) {
 		mmf_cfg->img_w = 1280; mmf_cfg->img_h = 720; mmf_cfg->img_fps = 60;
 	}
+#endif
+	mmf_vi_get_max_size(&mmf_cfg->img_w, &mmf_cfg->img_h);
 
 	if (kvm_cfg.res == 1440) {
 		mmf_cfg->img_w = 2560; mmf_cfg->img_h = 1440;
@@ -526,6 +529,11 @@ int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 	if (kvm_cfg.res == 480) {
 		mmf_cfg->img_w = 640; mmf_cfg->img_h = 480;
 	}
+
+	if (mmf_cfg->img_h < 1080) {
+		mmf_cfg->img_fps = 60;
+	}
+
 	mmf_cfg->img_fps = kvm_cfg.fps > 60 ? mmf_cfg->img_fps : (int32_t)kvm_cfg.fps;
 	mmf_cfg->img_qlty = (kvm_cfg.qlty < 50 || kvm_cfg.qlty > 100) ? mmf_cfg->img_qlty : (int32_t)kvm_cfg.qlty;
 
