@@ -432,6 +432,19 @@ static char* file_to_string(const char *file, size_t max_len)
 	return m_ptr;
 }
 
+static uint32_t file_to_uint(const char *file, uint32_t def)
+{
+	uint32_t ret = def;
+	char* str = file_to_string(file, 32);
+	if (str)
+	{
+		if (sscanf(str, "%u", &ret) != 1)
+			ret = def;
+		free(str);
+	}
+	return ret;
+}
+
 void show_string_on_oled(int olde_fb, char* name, const char *format, char *indata)
 {
 	char outdata[OLED_MAX_CHARS*2];
@@ -504,6 +517,7 @@ oled_disable:
 
 void show_info_on_oled(void)
 {
+	uint32_t width, height, res;
 	char *str_type;
 	int kvm_type = 4;
 	int olde_fb = priv.oled_fb;
@@ -511,6 +525,9 @@ void show_info_on_oled(void)
 	if (olde_fb < 0)
 		return;
 
+	width = file_to_uint("/kvmapp/kvm/width", 0);
+	height = file_to_uint("/kvmapp/kvm/height", 0);
+	res = file_to_uint("/kvmapp/kvm/res", 0);
 	str_type = file_to_string("/kvmapp/kvm/type", 32);
 	if (str_type) {
 		kvm_type = strcmp(str_type, "h264") ? kvm_type : 2;
@@ -524,7 +541,13 @@ void show_info_on_oled(void)
 	priv.pos_y += 1;
 	show_string_on_oled(olde_fb, "IP:", "%s", get_server_ip());
 	priv.pos_y += 1;
-	show_string_on_oled_from_file(olde_fb, "|RES:", "%sP", "/kvmapp/kvm/res");
+	if (!res && width && height) {
+		char str_res[OLED_MAX_CHARS + 1];
+		snprintf(str_res, sizeof(str_res), "%ux%u", width, height);
+		show_string_on_oled(olde_fb, "|RES:", "%s", str_res);
+	} else {
+		show_string_on_oled_from_file(olde_fb, "|RES:", "%sP", "/kvmapp/kvm/res");
+	}
 	show_string_on_oled_from_file(olde_fb, "|TYPE:", "%s", "/kvmapp/kvm/type");
 	show_string_on_oled_from_file(olde_fb, "|STREAM:", "%s FPS", "/kvmapp/kvm/now_fps");
 	show_string_on_oled_from_file(olde_fb, "|QUALITY:", (kvm_type == 2) ? "%s kbps" : "%s %%",

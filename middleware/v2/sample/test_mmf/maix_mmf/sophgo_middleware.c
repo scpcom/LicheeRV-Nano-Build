@@ -84,6 +84,7 @@ typedef struct {
 	int vi_vpss;
 	bool vi_is_inited;
 	bool vi_chn_is_inited[MMF_VI_MAX_CHN];
+	SIZE_S vi_max_size;
 	SIZE_S vi_size;
 	VIDEO_FRAME_INFO_S vi_frame[MMF_VI_MAX_CHN];
 
@@ -1026,6 +1027,8 @@ static CVI_S32 _mmf_init(void)
 		goto _need_exit_sys_and_deinit_vi;
 	}
 
+	priv.vi_max_size.u32Width = stSize.u32Width;
+	priv.vi_max_size.u32Height = stSize.u32Height;
 	priv.vi_size.u32Width = stSize.u32Width;
 	priv.vi_size.u32Height = stSize.u32Height;
 
@@ -5118,8 +5121,8 @@ int mmf_vi_get_max_size(int *width, int *height)
 	if (!height)
 		return -1;
 
-	*width = priv.vi_size.u32Width;
-	*height = priv.vi_size.u32Height;
+	*width = priv.vi_max_size.u32Width;
+	*height = priv.vi_max_size.u32Height;
 
 	return 0;
 }
