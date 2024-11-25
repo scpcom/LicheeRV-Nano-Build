@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-MAIX_CDK_VERSION = 5fff820584c5a520c021e1fdacba557eee456b0b
+MAIX_CDK_VERSION = 3aba2fe3fa9de9f638bb9cb34eca0c2e0f5f3813
 MAIX_CDK_SITE = $(call github,sipeed,MaixCDK,$(MAIX_CDK_VERSION))
 
 MAIX_CDK_SAMPLE = rtsp_demo
@@ -134,8 +134,8 @@ define MAIX_CDK_INSTALL_TARGET_CMDS
 	if [ -e ${@D}/dist/maixapp/lib -a ! -e ${@D}/dist/maixapp/lib/libmaixcam_lib.so ]; then \
 		rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/components/maixcam_lib/lib/libmaixcam_lib.so ${@D}/dist/maixapp/lib/ ; \
 	fi
-	mkdir -pv $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/
-	rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(MAIX_CDK_MAIXCAM_DIST)/dl_lib/libmaixcam_lib.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
+	#mkdir -pv $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/
+	#rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/$(MAIX_CDK_MAIXCAM_DIST)/dl_lib/libmaixcam_lib.so $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/
 	mkdir -pv $(TARGET_DIR)/maixapp/lib
 	mkdir -pv $(TARGET_DIR)/maixapp/tmp
 	if [ -e ${@D}/dist/maixapp ]; then \
