@@ -1,5 +1,13 @@
 #!/bin/bash -e
 
+for p in / /usr/ /usr/local/ ; do
+  if echo $PATH | grep -q ${p}bin ; then
+    if ! echo $PATH | grep -q ${p}sbin ; then
+      export PATH=${p}sbin:$PATH
+    fi
+  fi
+done
+
 cd build
 # enable usb disk, disable ncm
 sed -i s/'usb.ncm'/'usb.disk0'/g tools/common/sd_tools/genimage_rootless.cfg
