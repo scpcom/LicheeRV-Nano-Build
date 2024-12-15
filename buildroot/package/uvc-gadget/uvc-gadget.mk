@@ -20,6 +20,8 @@ endef
 define UVC_GADGET_INSTALL_TARGET_CMDS
 	mkdir -pv $(TARGET_DIR)/usr/bin/
 	rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/uvc-gadget $(TARGET_DIR)/usr/bin/
+	mkdir -pv $(TARGET_DIR)/etc/init.d/
+	cp -p ${@D}/uvc-gadget $(TARGET_DIR)/etc/init.d/uvc-gadget-server.elf
 endef
 
 $(eval $(generic-package))
