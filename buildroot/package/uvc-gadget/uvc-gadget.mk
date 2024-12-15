@@ -1,0 +1,25 @@
+################################################################################
+#
+# uvc-gadget
+#
+################################################################################
+
+UVC_GADGET_VERSION = 74522b25f982204c244357ca982a281d68352976
+UVC_GADGET_SITE = $(call github,wlhe,uvc-gadget,$(UVC_GADGET_VERSION))
+
+UVC_GADGET_MAKE_ENV += \
+	$(TARGET_MAKE_ENV) \
+	KERNEL_DIR=$(LINUX_DIR) \
+	ARCH=$(KERNEL_ARCH) \
+	CROSS_COMPILE="$(TARGET_CROSS)"
+
+define UVC_GADGET_BUILD_CMDS
+	$(UVC_GADGET_MAKE_ENV) $(BR2_MAKE) -C $(@D)
+endef
+
+define UVC_GADGET_INSTALL_TARGET_CMDS
+	mkdir -pv $(TARGET_DIR)/usr/bin/
+	rsync -r --verbose --copy-dirlinks --copy-links --hard-links ${@D}/uvc-gadget $(TARGET_DIR)/usr/bin/
+endef
+
+$(eval $(generic-package))
