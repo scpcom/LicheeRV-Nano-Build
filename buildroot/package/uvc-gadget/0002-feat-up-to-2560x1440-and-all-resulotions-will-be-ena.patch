@@ -1,0 +1,28 @@
+From a81f8eed4eb9dac31fb699b7446f47cfb148b6c2 Mon Sep 17 00:00:00 2001
+From: scpcom <scpcom@gmx.de>
+Date: Wed, 18 Dec 2024 23:28:11 +0100
+Subject: [PATCH] feat: up to 2560x1440 and all resulotions will be enabled
+ default
+
+---
+ uvc-gadget.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/uvc-gadget.c b/uvc-gadget.c
+index 4614911..86b143e 100644
+--- a/uvc-gadget.c
++++ b/uvc-gadget.c
+@@ -48,8 +48,8 @@
+ #define atomic_store(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_SEQ_CST)
+ 
+ #define SHM_NAME "/uvc_shared_mem_yuyv"
+-#define MAX_FRAMEBUFFER_SIZE (1920 * 1080 * 3 / 2) //2048x1080
+-#define SHM_SIZE (2 + 2 * MAX_FRAMEBUFFER_SIZE) // 假设 RGB 图像大小为 1920x1080，额外的2字节用于双缓冲同步
++#define MAX_FRAMEBUFFER_SIZE (2560 * 1440 * 3 / 2) // 2560x1440
++#define SHM_SIZE (2 + 2 * MAX_FRAMEBUFFER_SIZE) // 假设 RGB 图像大小为 2560x1440，额外的2字节用于双缓冲同步
+ 
+ typedef struct {
+     uint8_t current_buffer; // Current buffer (0 or 1) for the consumer to read
+-- 
+2.34.1
+
