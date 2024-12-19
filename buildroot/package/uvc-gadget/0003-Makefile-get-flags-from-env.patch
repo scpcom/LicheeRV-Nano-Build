@@ -1,0 +1,31 @@
+From f303cb67740b39fbfe40178677dae049a70cc88d Mon Sep 17 00:00:00 2001
+From: scpcom <scpcom@gmx.de>
+Date: Thu, 19 Dec 2024 01:20:52 +0100
+Subject: [PATCH] Makefile: get flags from env
+
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index ccf5a34..b84de21 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,10 +2,10 @@ CROSS_COMPILE	?=
+ ARCH		?= x86
+ KERNEL_DIR	?= /usr/src/linux
+ 
+-CC		:= $(CROSS_COMPILE)gcc
+-KERNEL_INCLUDE	:= -I$(KERNEL_DIR)/include -I$(KERNEL_DIR)/arch/$(ARCH)/include
+-CFLAGS		:= -W -Wall -g $(KERNEL_INCLUDE)
+-LDFLAGS		:= -g
++CC		?= $(CROSS_COMPILE)gcc
++KERNEL_INCLUDE	?= -I$(KERNEL_DIR)/include -I$(KERNEL_DIR)/arch/$(ARCH)/include
++CFLAGS		?= -W -Wall -g $(KERNEL_INCLUDE)
++LDFLAGS		?= -g
+ 
+ all: uvc-gadget
+ 
+-- 
+2.34.1
+
