@@ -70,6 +70,18 @@ if [ -e prepare-licheesgnano.sh ]; then
   bash -e prepare-licheesgnano.sh
 fi
 
+cd build
+# board config for maixcdk
+if [ $maixcdk = y ]; then
+  if ! grep -q "board" tools/common/sd_tools/genimage_rootless.cfg ; then
+    sed -i s/'\t\t\t"usb.dev",'/'\t\t\t"usb.dev",\n\t\t\t"board",'/g tools/common/sd_tools/genimage_rootless.cfg
+  fi
+  if ! grep -q "board" tools/common/sd_tools/sd_gen_burn_image_rootless.sh ; then
+    sed -i 's| \${output_dir}/input/usb.dev$| ${output_dir}/input/usb.dev\necho "id=maixcam" > ${output_dir}/input/board\necho "panel=st7701_hd228001c31" >> ${output_dir}/input/board|g' tools/common/sd_tools/sd_gen_burn_image_rootless.sh
+  fi
+fi
+cd ..
+
 source build/cvisetup.sh
 defconfig ${SG_BOARD_LINK}
 
@@ -94,10 +106,6 @@ if [ -e cviruntime -a -e flatbuffers ]; then
 fi
 
 build_all
-
-cd buildroot
-git restore configs/${BR_DEFCONFIG}
-cd ..
 
 # build other variant
 cp -p build/boards/${SG_BOARD_FAMILY}/${SG_BOARD_LINK}/${SG_BOARD_LINK}_defconfig bak.config
@@ -130,5 +138,15 @@ build_fsbl
 cp -v install/soc_${SG_BOARD_LINK}/fip.bin install/soc_${SG_BOARD_LINK}/dxq5d0019b480854.bin
 
 mv bak.config build/boards/${SG_BOARD_FAMILY}/${SG_BOARD_LINK}/${SG_BOARD_LINK}_defconfig
+
+cd build
+git restore boards/${SG_BOARD_FAMILY}/${SG_BOARD_LINK}/${SG_BOARD_LINK}_defconfig
+git restore tools/common/sd_tools/genimage_rootless.cfg
+git restore tools/common/sd_tools/sd_gen_burn_image_rootless.sh
+cd ..
+
+cd buildroot
+git restore configs/${BR_DEFCONFIG}
+cd ..
 
 echo OK
