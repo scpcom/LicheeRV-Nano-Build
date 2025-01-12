@@ -4,17 +4,17 @@ ifeq ($(PARAM_FILE), )
      include $(PARAM_FILE)
 endif
 
-bin_mod_dir := $(PWD)/../bin
+bin_mod_dir := $(realpath $(PWD)/../bin)
 isp_chip_dir := $(shell echo $(CHIP_ARCH) | tr A-Z a-z)
-isp_mod_dir := $(PWD)/../isp
+isp_mod_dir := $(realpath $(PWD)/../isp)
 isp_dir = $(isp_mod_dir)/$(isp_chip_dir)/isp
 isp_bin_dir = $(isp_mod_dir)/$(isp_chip_dir)/isp_bin
 
 SDIR = $(PWD)/src
-BIN_SRCS := $(wildcard $(bin_mod_dir)/src/*.c)
-ISP_SRCS := $(wildcard $(isp_mod_dir)/common/clog/*.c)
-ISP_SRCS += $(wildcard $(isp_dir)/src/*.c)
-ISP_SRCS += $(isp_bin_dir)/src/isp_3a_bin.c $(isp_bin_dir)/src/isp_bin.c
+BIN_SRCS := $(subst $(bin_mod_dir)/src,$(SDIR)/bin,$(wildcard $(bin_mod_dir)/src/*.c))
+ISP_SRCS := $(subst $(isp_mod_dir)/common/clog,$(SDIR)/clog,$(wildcard $(isp_mod_dir)/common/clog/*.c))
+ISP_SRCS += $(subst $(isp_dir)/src,$(SDIR)/isp,$(wildcard $(isp_dir)/src/*.c))
+ISP_SRCS += $(subst $(isp_bin_dir)/src,$(SDIR)/isp_bin,$(isp_bin_dir)/src/isp_3a_bin.c $(isp_bin_dir)/src/isp_bin.c)
 
 # 3rdparty lib
 BIN_INCLUDE_PATH = $(PWD)/../bin/prebuilt/include
@@ -72,34 +72,46 @@ EXTRA_CFLAGS += -DDISABLE_PQBIN_JSON -DENABLE_ISP_C906L -DISP_LIGHT
 all : $(BIN_TARGET_A) $(BIN_TARGET_SO) $(ISP_TARGET_A) $(ISP_TARGET_SO)
 
 
-$(bin_mod_dir)/src/%.o: $(bin_mod_dir)/src/%.c
+$(SDIR)/bin/%.o: $(bin_mod_dir)/src/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
 	@echo [$(notdir $(CC))] $(notdir $@)
 
-$(isp_dir)/src/%.o: $(isp_dir)/src/%.c
+$(SDIR)/clog/%.o: $(isp_mod_dir)/common/clog/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
 	@echo [$(notdir $(CC))] $(notdir $@)
 
-$(isp_bin_dir)/src/%.o: $(isp_bin_dir)/src/%.c
+$(SDIR)/isp/%.o: $(isp_dir)/src/%.c
 	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
 	@echo [$(notdir $(CC))] $(notdir $@)
 
-$(BIN_TARGET_A): $(BIN_OBJS)
+$(SDIR)/isp_bin/%.o: $(isp_bin_dir)/src/%.c
+	@$(CC) $(DEPFLAGS) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ -c $<
+	@echo [$(notdir $(CC))] $(notdir $@)
+
+bin_dirs:
+	@mkdir -p $(SDIR)/bin
+
+isp_dirs:
+	@mkdir -p $(SDIR)/clog
+	@mkdir -p $(SDIR)/isp
+	@mkdir -p $(SDIR)/isp_bin
+
+$(BIN_TARGET_A): bin_dirs $(BIN_OBJS)
 	@$(AR) $(ARFLAGS) $(BIN_TARGET_A) $(BIN_OBJS)
 	@echo -e $(YELLOW)[LINK]$(END)[$(notdir $(AR))] $(notdir $(BIN_TARGET_A))
 	@echo "$$AR_MRI" | $(AR) -M
 
-$(BIN_TARGET_SO): $(BIN_OBJS)
+$(BIN_TARGET_SO): bin_dirs $(BIN_OBJS)
 	@$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) -o $(BIN_TARGET_SO) --start-group $(BIN_OBJS) $(LIBS) --end-group
 	@echo -e $(GREEN)[LINK]$(END)[$(notdir $(LD))] $(notdir $(BIN_TARGET_SO))
 	@$(STRIP) $(BIN_TARGET_SO)
 
-$(ISP_TARGET_A): $(ISP_OBJS)
+$(ISP_TARGET_A): isp_dirs $(ISP_OBJS)
 	@$(AR) $(ARFLAGS) $(ISP_TARGET_A) $(ISP_OBJS)
 	@echo -e $(YELLOW)[LINK]$(END)[$(notdir $(AR))] $(notdir $(ISP_TARGET_A))
 	@echo "$$AR_MRI" | $(AR) -M
 
-$(ISP_TARGET_SO): $(ISP_OBJS)
+$(ISP_TARGET_SO): isp_dirs $(ISP_OBJS)
 	@$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) -o $(ISP_TARGET_SO) --start-group $(ISP_OBJS) $(LIBS) --end-group
 	@echo -e $(GREEN)[LINK]$(END)[$(notdir $(LD))] $(notdir $(ISP_TARGET_SO))
 	@$(STRIP) $(ISP_TARGET_SO)

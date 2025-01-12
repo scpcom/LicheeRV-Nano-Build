@@ -2413,7 +2413,9 @@ static int _test_vi_venc_h265_rtsp(void)
 	int img_w = 2560, img_h = 1440, img_fps = 30, fit = 0, img_fmt = PIXEL_FORMAT_NV21;
 	(void)fit;
 	int ch = 0;
+	mmf_vi_get_max_size(&img_w, &img_h);
 	char *sensor_name = mmf_get_sensor_name();
+	printf("sensor %s max size %dx%d\n", sensor_name, img_w, img_h);
 	if (!strcmp(sensor_name, "lt6911")) {
 		img_w = 1280; img_h = 720; img_fps = 60;
 	}

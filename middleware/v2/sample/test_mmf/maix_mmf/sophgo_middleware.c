@@ -1059,6 +1059,9 @@ char* mmf_get_sensor_name(void)
 	static char name[30];
 
 	switch (priv.sensor_type) {
+	    case GCORE_GC2083_MIPI_2M_30FPS_10BIT:
+		snprintf(name, sizeof(name), "gcore_gc2083");
+		return name;
 	    case GCORE_GC4653_MIPI_4M_30FPS_10BIT:
 	    case GCORE_GC4653_MIPI_720P_60FPS_10BIT:
 		snprintf(name, sizeof(name), "gcore_gc4653");
@@ -1074,6 +1077,9 @@ char* mmf_get_sensor_name(void)
 		return name;
 	    case GCORE_OV2685_MIPI_1600x1200_30FPS_10BIT:
 		snprintf(name, sizeof(name), "ov_ov2685");
+		return name;
+	    case OV_OV5647_MIPI_2M_30FPS_10BIT:
+		snprintf(name, sizeof(name), "ov_ov5647");
 		return name;
 	    default:
 		break;
