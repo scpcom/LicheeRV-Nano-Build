@@ -279,7 +279,7 @@ static inline int is_h26x_stream(uint8_t type)
 	return (type == 1 || type == 2);
 }
 
-int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
+static int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 {
 	int cfg_qlty = is_h26x_stream(kvm_cfg.type) ? 0 : qlty;
 	int cfg_gop = is_h26x_stream(kvm_cfg.type) ? kvm_cfg.gop : 0;
@@ -300,7 +300,7 @@ int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 }
 
 #if 0
-int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
+static int kvm_stream_venc_init(int ch, int w, int h, int fmt, int qlty)
 {
 	return mmf_enc_jpg_init(ch, w, h, fmt, qlty);
 }
@@ -382,7 +382,7 @@ static int uint_to_file(const char *file, uint32_t val)
 	return -1;
 }
 
-int kvm_cfg_read(void)
+static int kvm_cfg_read(void)
 {
 	kvm_cfg_t new_cfg;
 	int changed;
@@ -432,7 +432,7 @@ int kvm_cfg_read(void)
 	return changed;
 }
 
-int kvm_write_now_fps(double now_frame_int)
+static int kvm_write_now_fps(double now_frame_int)
 {
 	int now_fps = 0;
 	uint64_t now_update = _get_time_us();
@@ -459,7 +459,7 @@ int kvm_write_now_fps(double now_frame_int)
 	return changed;
 }
 
-int kvm_write_state(int state)
+static int kvm_write_state(int state)
 {
 	int changed = state != kvm_state.state;
 
@@ -474,7 +474,7 @@ int kvm_write_state(int state)
 	return changed;
 }
 
-int kvm_deinit_mmf_channels(kvm_mmf_t *mmf_cfg)
+static int kvm_deinit_mmf_channels(kvm_mmf_t *mmf_cfg)
 {
 	if (!priv.chn_is_init)
 		return 0;
@@ -498,7 +498,7 @@ int kvm_deinit_mmf_channels(kvm_mmf_t *mmf_cfg)
 	return 0;
 }
 
-int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
+static int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 {
 	if (priv.chn_is_init)
 		return 0;
@@ -563,7 +563,7 @@ int kvm_init_mmf_channels(kvm_mmf_t *mmf_cfg)
 	return 0;
 }
 
-int kvm_reset_mmf_channels(kvm_mmf_t *mmf_cfg)
+static int kvm_reset_mmf_channels(kvm_mmf_t *mmf_cfg)
 {
 	int ret = kvm_deinit_mmf_channels(mmf_cfg);
 	if (ret)
