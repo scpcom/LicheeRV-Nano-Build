@@ -2,15 +2,12 @@
 
 if [ "$1" = "start" ]
 then
-	# Cache uid to prevent deadlock during cvi_base operation
-	if [ ! -e /boot/cvi_base_uid ]; then
-		$(cat /sys/class/cvi-base/base_uid > /boot/cvi_base_uid)
-	fi
-
 	str_value=$(cat /sys/class/cvi-base/base_uid | awk '{print $2}')
 	first_uint=$(echo $str_value | cut -d'_' -f1)
 	second_uint=$(echo $str_value | cut -d'_' -f2)
 	result="$first_uint$second_uint"
 	echo $result > /device_key
+	# for compatibility with previous network mac addr
+	cat /sys/class/cvi-base/base_uid > /device_key_legacy
 fi
 
