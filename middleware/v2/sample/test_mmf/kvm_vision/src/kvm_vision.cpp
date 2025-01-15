@@ -1035,3 +1035,8 @@ void kvmv_deinit()
 	priv.kvm_is_init = 0;
 	INFO("bye!");
 }
+
+uint8_t kvmv_hdmi_control(uint8_t _en)
+{
+	return 0;
+}
