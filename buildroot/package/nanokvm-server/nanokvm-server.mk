@@ -4,10 +4,10 @@
 #
 ################################################################################
 
-NANOKVM_SERVER_VERSION = 1db304a5f36e07974ee93bce2758779d5f66fdc5
+NANOKVM_SERVER_VERSION = 97a9b376c79611ca1cceb8f6df282670bb597379
 NANOKVM_SERVER_SITE = $(call github,sipeed,NanoKVM,$(NANOKVM_SERVER_VERSION))
 
-NANOKVM_SERVER_DEPENDENCIES = host-go host-nodejs host-python3 opencv4
+NANOKVM_SERVER_DEPENDENCIES = host-go host-nodejs host-python3
 
 ifeq ($(BR2_PACKAGE_MAIX_CDK),y)
 # Use MaixCDK to build kvm_system.
@@ -28,6 +28,9 @@ HOST_NODEJS_BIN_ENV = $(HOST_CONFIGURE_OPTS) \
 	npm_config_cache=$(BUILD_DIR)/.npm-cache
 
 HOST_COREPACK = $(HOST_NODEJS_BIN_ENV) $(HOST_DIR)/bin/corepack
+
+NANOKVM_SERVER_PNPM_VERSION = 9.15.5
+NANOKVM_SERVER_PNPM_SHA_SUM = cb1f6372ef64e2ba352f2f46325adead1c99ff8f
 
 NANOKVM_SERVER_GOMOD = server
 
@@ -135,10 +138,12 @@ define NANOKVM_SERVER_BUILD_CMDS
 	GOPROXY=direct GOSUMDB="sum.golang.org" $(GO_BIN) mod tidy
 	cd $(@D)/$(NANOKVM_SERVER_GOMOD) ; \
 	sed -i 's|-L../dl_lib -lkvm|-L../dl_lib -L$(TARGET_DIR)/usr/lib -lkvm|g' common/cgo.go ; \
-	sed -i s/' -lkvm$$'/' -lkvm -lmaixcam_lib -latomic -lae -laf -lawb -lcvi_bin -lcvi_bin_isp -lini -lisp -lisp_algo -lsys -lvdec -lvenc -lvpu'/g common/cgo.go ; \
-	sed -i s/'-lmaixcam_lib -latomic'/'-lmaixcam_lib -ljpeg -lopencv_calib3d -lopencv_core -lopencv_dnn -lopencv_features2d -lopencv_flann -lopencv_gapi -lopencv_imgcodecs -lopencv_imgproc -lopencv_objdetect -lopencv_video -lpng -lprotobuf -lsharpyuv -ltbb -ltiff -lwebp -lz -latomic'/g common/cgo.go ; \
+	sed -i s/' -lkvm$$'/' -lkvm -lmaixcam_lib -latomic -lae -laf -lawb -lcvi_bin -lcvi_bin_isp -lini -lisp -lisp_algo -lsys -lvdec -lvenc -lvpu'/g common/cgo.go
+	cd $(@D)/$(NANOKVM_SERVER_GOMOD) ; \
 	CGO_ENABLED=1 $(NANOKVM_SERVER_GO_ENV) $(GO_BIN) build -x -ldflags="-extldflags '-Wl,-rpath,\$$ORIGIN/dl_lib'"
 	cd $(@D)/web ; \
+	$(HOST_COREPACK) install -g pnpm@$(NANOKVM_SERVER_PNPM_VERSION)+sha1.$(NANOKVM_SERVER_PNPM_SHA_SUM) ; \
+	$(HOST_COREPACK) use pnpm@$(NANOKVM_SERVER_PNPM_VERSION) ; \
 	$(HOST_COREPACK) pnpm install
 	cd $(@D)/web ; \
 	$(HOST_COREPACK) pnpm build
@@ -146,7 +151,7 @@ define NANOKVM_SERVER_BUILD_CMDS
 		rm -rf $(@D)/../maix-cdk-$(MAIX_CDK_VERSION)/examples/kvm_system ; \
 		rsync -avpPxH $(@D)/support/kvm_system $(@D)/../maix-cdk-$(MAIX_CDK_VERSION)/examples/ ; \
 		cd $(@D)/../maix-cdk-$(MAIX_CDK_VERSION)/examples/kvm_system/ ; \
-		$(HOST_DIR)/bin/maixcdk build -p maixcam ; \
+		PATH=$(BR_PATH) $(HOST_DIR)/bin/maixcdk build -p maixcam ; \
 		rsync -r --verbose --copy-dirlinks --copy-links --hard-links $(@D)/../maix-cdk-$(MAIX_CDK_VERSION)/examples/kvm_system/dist/kvm_system_release/kvm_system $(@D)/support/kvm_system/ ; \
 	fi
 endef
