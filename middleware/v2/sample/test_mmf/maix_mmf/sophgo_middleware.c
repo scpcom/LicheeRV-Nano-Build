@@ -64,14 +64,6 @@ extern int ionFree(struct sys_ion_data *para);
 #define MMF_VO_USE_NV21_ONLY	0
 #define MMF_RGN_MAX_NUM			16
 
-#define MMF_VB_VI_ID			0
-#define MMF_VB_VO_ID			1
-#define MMF_VB_USER_ID			2
-#define MMF_VB_ENC_H26X_ID		3
-#define MMF_VB_ENC_JPEG_ID		4
-#define MMF_VB_DEC_H26X_ID		5
-#define MMF_VB_DEC_JPEG_ID		6
-
 #if VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN
 #error "VPSS_MAX_PHY_CHN_NUM < MMF_VI_MAX_CHN"
 #endif
@@ -154,6 +146,14 @@ typedef struct {
 	int vb_count_of_vo;
 	int vb_size_of_private;
 	int vb_count_of_private;
+	uint8_t vb_vi_id;
+	uint8_t vb_vo_id;
+	uint8_t vb_user_id;
+	uint8_t vb_enc_h26x_id;
+	uint8_t vb_enc_jpeg_id;
+	uint8_t vb_dec_h26x_id;
+	uint8_t vb_dec_jpeg_id;
+	CVI_U32 vb_max_pool_cnt;
 
 	SAMPLE_SNS_TYPE_E sensor_type;
 } priv_t;
@@ -194,65 +194,81 @@ static void priv_param_init(void)
 	priv.vo_vpss = VPSS_INVALID_GRP;
 	priv.dec_pop_timeout = 1000;
 
+	priv.vb_vi_id = 0;
+	priv.vb_vo_id = 1;
+	priv.vb_user_id = 2;
+	priv.vb_enc_h26x_id = 3;
+	priv.vb_enc_jpeg_id = 4;
+	priv.vb_dec_h26x_id = 5;
+	priv.vb_dec_jpeg_id = 6;
+
 	priv.vb_conf.u32MaxPoolCnt = 1;
-	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
-	priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkCnt = 8;
-	priv.vb_conf.astCommPool[MMF_VB_VO_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
+	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkCnt = 8;
+	priv.vb_conf.astCommPool[priv.vb_vo_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
 
-	priv.vb_conf.astCommPool[MMF_VB_USER_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
-	priv.vb_conf.astCommPool[MMF_VB_USER_ID].u32BlkCnt = 2;
-	priv.vb_conf.astCommPool[MMF_VB_USER_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+	priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
+	priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkCnt = 2;
+	priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
 
-	g_priv.enc_h26x_enable = 1;
+	if (priv.vb_max_pool_cnt < priv.vb_conf.u32MaxPoolCnt) {
+		priv.vb_max_pool_cnt = 7;
+	}
+
+	g_priv.enc_h26x_enable = (priv.vb_max_pool_cnt > priv.vb_conf.u32MaxPoolCnt) ? 1 : 0;
 	if (g_priv.enc_h26x_enable) {
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].u32BlkCnt = 1;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_H26X_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_enc_h26x_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
+		priv.vb_conf.astCommPool[priv.vb_enc_h26x_id].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[priv.vb_enc_h26x_id].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
 	}
 
-	g_priv.enc_jpg_enable = 1;
+	g_priv.enc_jpg_enable = (priv.vb_max_pool_cnt > priv.vb_conf.u32MaxPoolCnt) ? 1 : 0;
 	if (g_priv.enc_jpg_enable) {
-		priv.vb_conf.astCommPool[MMF_VB_ENC_JPEG_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_JPEG_ID].u32BlkCnt = 1;
-		priv.vb_conf.astCommPool[MMF_VB_ENC_JPEG_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_enc_jpeg_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
+		priv.vb_conf.astCommPool[priv.vb_enc_jpeg_id].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[priv.vb_enc_jpeg_id].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
+	} else {
+		priv.vb_enc_jpeg_id = priv.vb_enc_h26x_id;
 	}
 
-	g_priv.dec_h26x_enable = 1;
+	g_priv.dec_h26x_enable = (priv.vb_max_pool_cnt > priv.vb_conf.u32MaxPoolCnt) ? 1 : 0;
 	if (g_priv.dec_h26x_enable) {
-		priv.vb_conf.astCommPool[MMF_VB_DEC_H26X_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
-		priv.vb_conf.astCommPool[MMF_VB_DEC_H26X_ID].u32BlkCnt = 1;
-		priv.vb_conf.astCommPool[MMF_VB_DEC_H26X_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_dec_h26x_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
+		priv.vb_conf.astCommPool[priv.vb_dec_h26x_id].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[priv.vb_dec_h26x_id].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
 	}
 
-	g_priv.dec_jpg_enable = 1;
+	g_priv.dec_jpg_enable = (priv.vb_max_pool_cnt > priv.vb_conf.u32MaxPoolCnt) ? 1 : 0;
 	if (g_priv.dec_jpg_enable) {
-		priv.vb_conf.astCommPool[MMF_VB_DEC_JPEG_ID].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
-		priv.vb_conf.astCommPool[MMF_VB_DEC_JPEG_ID].u32BlkCnt = 1;
-		priv.vb_conf.astCommPool[MMF_VB_DEC_JPEG_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_dec_jpeg_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
+		priv.vb_conf.astCommPool[priv.vb_dec_jpeg_id].u32BlkCnt = 1;
+		priv.vb_conf.astCommPool[priv.vb_dec_jpeg_id].enRemapMode = VB_REMAP_MODE_CACHED;
 		priv.vb_conf.u32MaxPoolCnt ++;
+	} else {
+		priv.vb_dec_jpeg_id = priv.vb_dec_h26x_id;
 	}
 
 	if (priv.vb_of_vi_is_config) {
-		priv.vb_conf.astCommPool[MMF_VB_VI_ID].u32BlkSize = priv.vb_size_of_vi;
-		priv.vb_conf.astCommPool[MMF_VB_VI_ID].u32BlkCnt = priv.vb_count_of_vi;
-		priv.vb_conf.astCommPool[MMF_VB_VI_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_vi_id].u32BlkSize = priv.vb_size_of_vi;
+		priv.vb_conf.astCommPool[priv.vb_vi_id].u32BlkCnt = priv.vb_count_of_vi;
+		priv.vb_conf.astCommPool[priv.vb_vi_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	}
 
 	if (priv.vb_of_vo_is_config) {
-		priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkSize = priv.vb_size_of_vo;
-		priv.vb_conf.astCommPool[MMF_VB_VO_ID].u32BlkCnt = priv.vb_count_of_vo;
-		priv.vb_conf.astCommPool[MMF_VB_VO_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = priv.vb_size_of_vo;
+		priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkCnt = priv.vb_count_of_vo;
+		priv.vb_conf.astCommPool[priv.vb_vo_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	}
 
 	if (priv.vb_of_private_is_config) {
-		priv.vb_conf.astCommPool[MMF_VB_USER_ID].u32BlkSize = priv.vb_size_of_private;
-		priv.vb_conf.astCommPool[MMF_VB_USER_ID].u32BlkCnt = priv.vb_count_of_private;
-		priv.vb_conf.astCommPool[MMF_VB_USER_ID].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkSize = priv.vb_size_of_private;
+		priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkCnt = priv.vb_count_of_private;
+		priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	}
 }
 
@@ -695,8 +711,8 @@ int _try_release_vio_all(void)
 
 void mmf_pre_config_sys(mmf_sys_cfg_t *cfg)
 {
-	UNUSED(cfg);
 	// TODO support custom buffer pools
+	priv.vb_max_pool_cnt = cfg->max_pool_cnt;
 }
 
 static void _mmf_sys_exit(void)
@@ -726,9 +742,9 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 		DATA_BITWIDTH_8, enCompressMode, DEFAULT_ALIGN);
 	u32BlkSize = MAX(u32BlkSize, u32BlkRotSize);
 
-	stVbConf.astCommPool[MMF_VB_VI_ID].u32BlkSize	= u32BlkSize;
-	stVbConf.astCommPool[MMF_VB_VI_ID].u32BlkCnt	= 3;
-	stVbConf.astCommPool[MMF_VB_VI_ID].enRemapMode	= VB_REMAP_MODE_CACHED;
+	stVbConf.astCommPool[priv.vb_vi_id].u32BlkSize	= u32BlkSize;
+	stVbConf.astCommPool[priv.vb_vi_id].u32BlkCnt	= 3;
+	stVbConf.astCommPool[priv.vb_vi_id].enRemapMode	= VB_REMAP_MODE_CACHED;
 #if 0
 {
 	VB_CONFIG_S vb_config;
@@ -1906,7 +1922,7 @@ static int _mmf_add_vo_channel(int layer, int ch, int width, int height, int for
 		priv.vo_video_pre_frame_width[ch] = width;
 		priv.vo_video_pre_frame_height[ch] = height;
 		priv.vo_video_pre_frame_format[ch] = format_in;
-		// priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format_in);
+		// priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(priv.vb_user_id, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format_in);
 		// if (!priv.vo_video_pre_frame[ch]) {
 		// 	printf("Alloc frame failed!\r\n");
 		// 	goto error_and_unbind;
@@ -1971,7 +1987,7 @@ error_and_stop_vo:
 		priv.vo_video_pre_frame_width[ch] = width;
 		priv.vo_video_pre_frame_height[ch] = height;
 		priv.vo_video_pre_frame_format[ch] = format_in;
-		priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format_in);
+		priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(priv.vb_user_id, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format_in);
 		if (!priv.vo_video_pre_frame[ch]) {
 			printf("Alloc frame failed!\r\n");
 			goto error_and_unbind;
@@ -2376,7 +2392,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 				_mmf_free_frame(priv.vo_video_pre_frame[ch]);
 				priv.vo_video_pre_frame[ch] = NULL;
 			}
-			priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format);
+			priv.vo_video_pre_frame[ch] = (VIDEO_FRAME_INFO_S *)_mmf_alloc_frame(priv.vb_user_id, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format);
 			if (!priv.vo_video_pre_frame[ch]) {
 				printf("Alloc frame failed!\r\n");
 				return -1;
@@ -2450,7 +2466,7 @@ int mmf_vo_frame_push_with_fit(int layer, int ch, void *data, int len, int width
 
 		memset(&stVideoFrame, 0, sizeof(stVideoFrame));
 
-		if (_mmf_init_frame(MMF_VB_USER_ID, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format, &stVideoFrame, &stVbCalConfig) != CVI_SUCCESS) {
+		if (_mmf_init_frame(priv.vb_user_id, (SIZE_S){(CVI_U32)width, (CVI_U32)height}, (PIXEL_FORMAT_E)format, &stVideoFrame, &stVbCalConfig) != CVI_SUCCESS) {
 			return CVI_FAILURE;
 		}
 
@@ -3117,7 +3133,7 @@ static int _mmf_enc_jpg_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	priv.enc_chn_type[ch] = PT_JPEG;
-	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_JPEG_ID;
+	priv.enc_chn_vb_id[ch] = priv.vb_enc_jpeg_id;
 
 	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
 	priv.enc_chn_cfg[ch].w = cfg->w;
@@ -3365,7 +3381,7 @@ static int _mmf_enc_h265_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	priv.enc_chn_type[ch] = PT_H265;
-	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H26X_ID;
+	priv.enc_chn_vb_id[ch] = priv.vb_enc_h26x_id;
 
 	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
 	priv.enc_chn_cfg[ch].w = cfg->w;
@@ -3570,7 +3586,7 @@ static int _mmf_enc_h264_init(int ch, mmf_venc_cfg_t *cfg)
 	}
 
 	priv.enc_chn_type[ch] = PT_H264;
-	priv.enc_chn_vb_id[ch] = MMF_VB_ENC_H26X_ID;
+	priv.enc_chn_vb_id[ch] = priv.vb_enc_h26x_id;
 
 	memcpy(&priv.enc_chn_cfg[ch], cfg, sizeof(priv.enc_chn_cfg[ch]));
 	priv.enc_chn_cfg[ch].w = cfg->w;
@@ -4625,7 +4641,7 @@ int mmf_vdec_get_cfg(int ch, mmf_vdec_cfg_t *cfg)
 
 static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr, SIZE_S size_in)
 {
-	int vb_id = MMF_VB_DEC_JPEG_ID;
+	int vb_id = priv.vb_dec_jpeg_id;
 
 	if (ch < 0 || ch >= MMF_DEC_MAX_CHN) {
 		printf("%s: channel %d is out of range.\n", __func__, ch);
@@ -4638,15 +4654,15 @@ static int _mmf_add_vdec_channel(int ch, int format_out, VDEC_CHN_ATTR_S *chn_at
 
 	switch (chn_attr->enType) {
 		case PT_H265:
-			vb_id = MMF_VB_DEC_H26X_ID;
+			vb_id = priv.vb_dec_h26x_id;
 			break;
 		case PT_H264:
-			vb_id = MMF_VB_DEC_H26X_ID;
+			vb_id = priv.vb_dec_h26x_id;
 			break;
 		case PT_MJPEG:
 			//fallthrough;
 		case PT_JPEG:
-			vb_id = MMF_VB_DEC_JPEG_ID;
+			vb_id = priv.vb_dec_jpeg_id;
 			break;
 		default:
 			printf("%s: type %d may not be supported.\n", __func__, chn_attr->enType);
