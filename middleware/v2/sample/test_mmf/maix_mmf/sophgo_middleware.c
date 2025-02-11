@@ -174,6 +174,8 @@ typedef struct {
 static priv_t priv;
 static g_priv_t g_priv;
 
+static CVI_S64 _get_ion_size_info(const char *path);
+
 static int mmf_region_frame_push2(int ch, void *frame_info);
 
 static int mmf_venc_deinit(int ch);
@@ -188,6 +190,8 @@ static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in);
 #define DISP_H	480
 static void priv_param_init(void)
 {
+	CVI_S64 ion_total_mem = _get_ion_size_info("/sys/kernel/debug/ion/cvi_carveout_heap_dump/total_mem");
+
 	priv.vi_pop_timeout = 100;
 	priv.vi_vpss = VPSS_INVALID_GRP;
 	priv.vo_rotate = 90;
@@ -213,8 +217,13 @@ static void priv_param_init(void)
 	priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
 
+	printf("ion heap total size: %u KiB\n", ion_total_mem / 1024);
 	if (priv.vb_max_pool_cnt < priv.vb_conf.u32MaxPoolCnt) {
-		priv.vb_max_pool_cnt = 7;
+		if (ion_total_mem > 0 && ion_total_mem < 64 * 1024 * 1024) {
+			priv.vb_max_pool_cnt = 4;
+		} else {
+			priv.vb_max_pool_cnt = 7;
+		}
 	}
 
 	g_priv.enc_h26x_enable = (priv.vb_max_pool_cnt > priv.vb_conf.u32MaxPoolCnt) ? 1 : 0;
@@ -357,6 +366,27 @@ void mmf_dump_frame(VIDEO_FRAME_INFO_S *frame) {
 	printf("s16OffsetBottom:\t\t%d\n", vframe->s16OffsetBottom);
 	printf("s16OffsetLeft:\t\t%d\n", vframe->s16OffsetLeft);
 	printf("s16OffsetRight:\t\t%d\n", vframe->s16OffsetRight);
+}
+
+static CVI_S64 _get_ion_size_info(const char *path)
+{
+	FILE *fd = NULL;
+	char val[256] = {0};
+
+	fd = fopen(path, "r");
+
+	if (fd == NULL) {
+		fprintf(stderr, "Error opening file %s\n", path);
+		return 0;
+	}
+
+	memset(val, 0, 128);
+
+	fgets(val, 128, fd);
+
+	pclose(fd);
+
+	return atol(val);
 }
 
 static int _free_leak_memory_of_ion(void)
@@ -777,6 +807,7 @@ static CVI_S32 _mmf_sys_init(SIZE_S stSize)
 	for (CVI_U32 i = 0; i < stVbConf.u32MaxPoolCnt; ++i) {
 		u32TotalSize += stVbConf.astCommPool[i].u32BlkSize * stVbConf.astCommPool[i].u32BlkCnt;
 	}
+	printf("common pools count: %u\n", stVbConf.u32MaxPoolCnt);
 	printf("common pools total size: %u KiB\n", u32TotalSize / 1024);
 
 	s32Ret = SAMPLE_COMM_SYS_Init(&stVbConf);
