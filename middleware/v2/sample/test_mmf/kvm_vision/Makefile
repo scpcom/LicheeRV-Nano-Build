@@ -25,7 +25,7 @@ INCLUDES = . \
 					$(ISP_INC) \
 					../../common/ \
 					$(KERNEL_INC) \
-					$(ROOT)/maixcam_lib/include
+					$(ROOT)/kvm_mmf/include
 
 #-------------------------------Source-------------------------------
 #
@@ -42,12 +42,12 @@ SOURCE_FILES += $(foreach dir,$(SOURCE_PATHS),$(wildcard $(dir)/*.c))
 LIBPATHS =
 ifdef RELEASE
 # relase library path
-LIBPATHS +=
+LIBPATHS += $(ROOT)/kvm_mmf/release.linux
 else
 LIBPATHS +=
 endif
 
-LIBS = maixcam_lib
+LIBS = kvm_mmf
 
 STATIC_LIBS =
 
