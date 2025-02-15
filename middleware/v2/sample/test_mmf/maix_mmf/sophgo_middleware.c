@@ -142,8 +142,10 @@ typedef struct {
 
 	VB_CONFIG_S vb_conf;
 	int vb_of_vi_is_config : 1;
+#ifndef KVM_MMF
 	int vb_of_vo_is_config : 1;
 	int vb_of_private_is_config : 1;
+#endif
 	int vb_size_of_vi;
 	int vb_count_of_vi;
 	int vb_size_of_vo;
@@ -151,8 +153,10 @@ typedef struct {
 	int vb_size_of_private;
 	int vb_count_of_private;
 	uint8_t vb_vi_id;
+#ifndef KVM_MMF
 	uint8_t vb_vo_id;
 	uint8_t vb_user_id;
+#endif
 	uint8_t vb_enc_h26x_id;
 	uint8_t vb_enc_jpeg_id;
 #ifndef KVM_MMF
@@ -210,26 +214,30 @@ static void priv_param_init(void)
 	priv.dec_pop_timeout = 1000;
 #endif
 
-	priv.vb_vi_id = 0;
-	priv.vb_vo_id = 1;
-	priv.vb_user_id = 2;
-	priv.vb_enc_h26x_id = 3;
-	priv.vb_enc_jpeg_id = 4;
-#ifndef KVM_MMF
-	priv.vb_dec_h26x_id = 5;
-	priv.vb_dec_jpeg_id = 6;
-#endif
+	priv.vb_conf.u32MaxPoolCnt = 0;
+	priv.vb_vi_id = priv.vb_conf.u32MaxPoolCnt;
+	priv.vb_conf.u32MaxPoolCnt ++;
 
-	priv.vb_conf.u32MaxPoolCnt = 1;
+#ifndef KVM_MMF
+	priv.vb_vo_id = priv.vb_conf.u32MaxPoolCnt;
 	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
 	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkCnt = 8;
 	priv.vb_conf.astCommPool[priv.vb_vo_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
 
+	priv.vb_user_id = priv.vb_conf.u32MaxPoolCnt;
 	priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
 	priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkCnt = 2;
 	priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	priv.vb_conf.u32MaxPoolCnt ++;
+#endif
+
+	priv.vb_enc_h26x_id = priv.vb_conf.u32MaxPoolCnt;
+	priv.vb_enc_jpeg_id = priv.vb_conf.u32MaxPoolCnt + 1;
+#ifndef KVM_MMF
+	priv.vb_dec_h26x_id = priv.vb_conf.u32MaxPoolCnt + 2;
+	priv.vb_dec_jpeg_id = priv.vb_conf.u32MaxPoolCnt + 3;
+#endif
 
 	printf("ion heap total size: %u KiB\n", ion_total_mem / 1024);
 	if (priv.vb_max_pool_cnt < priv.vb_conf.u32MaxPoolCnt) {
@@ -284,6 +292,7 @@ static void priv_param_init(void)
 		priv.vb_conf.astCommPool[priv.vb_vi_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	}
 
+#ifndef KVM_MMF
 	if (priv.vb_of_vo_is_config) {
 		priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = priv.vb_size_of_vo;
 		priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkCnt = priv.vb_count_of_vo;
@@ -295,6 +304,7 @@ static void priv_param_init(void)
 		priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkCnt = priv.vb_count_of_private;
 		priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
 	}
+#endif
 }
 
 static SAMPLE_VI_CONFIG_S g_stViConfig;
@@ -4843,6 +4853,8 @@ int mmf_vb_config_of_vi(uint32_t size, uint32_t count)
 	return 0;
 }
 
+#ifndef KVM_MMF
+
 int mmf_vb_config_of_vo(uint32_t size, uint32_t count)
 {
 	priv.vb_size_of_vo = size;
@@ -4858,6 +4870,8 @@ int mmf_vb_config_of_private(uint32_t size, uint32_t count)
 	priv.vb_of_private_is_config = 1;
 	return 0;
 }
+
+#endif // !KVM_MMF
 
 int mmf_set_exp_mode(int ch, int mode)
 {
