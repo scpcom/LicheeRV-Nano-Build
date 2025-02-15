@@ -124,6 +124,7 @@ typedef struct {
 	VENC_STREAM_S enc_chn_stream[MMF_ENC_MAX_CHN];
 	mmf_venc_cfg_t enc_chn_cfg[MMF_ENC_MAX_CHN];
 
+#ifndef KVM_MMF
 	int dec_pop_timeout;
 	PAYLOAD_TYPE_E dec_chn_type[MMF_DEC_MAX_CHN];
 	int dec_chn_vb_id[MMF_DEC_MAX_CHN];
@@ -135,6 +136,7 @@ typedef struct {
 	VDEC_STREAM_S dec_chn_stream[MMF_DEC_MAX_CHN];
 	SIZE_S dec_chn_size_in[MMF_DEC_MAX_CHN];
 	mmf_vdec_cfg_t dec_chn_cfg[MMF_DEC_MAX_CHN];
+#endif
 
 	VB_CONFIG_S vb_conf;
 	int vb_of_vi_is_config : 1;
@@ -151,8 +153,10 @@ typedef struct {
 	uint8_t vb_user_id;
 	uint8_t vb_enc_h26x_id;
 	uint8_t vb_enc_jpeg_id;
+#ifndef KVM_MMF
 	uint8_t vb_dec_h26x_id;
 	uint8_t vb_dec_jpeg_id;
+#endif
 	CVI_U32 vb_max_pool_cnt;
 
 	SAMPLE_SNS_TYPE_E sensor_type;
@@ -182,9 +186,11 @@ static int mmf_venc_deinit(int ch);
 static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
 static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality);
 
+#ifndef KVM_MMF
 static int mmf_vdec_deinit(int ch);
 static int _mmf_vdec_push(int ch, VDEC_STREAM_S *stStream);
 static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in);
+#endif
 
 #define DISP_W	640
 #define DISP_H	480
@@ -196,15 +202,19 @@ static void priv_param_init(void)
 	priv.vi_vpss = VPSS_INVALID_GRP;
 	priv.vo_rotate = 90;
 	priv.vo_vpss = VPSS_INVALID_GRP;
+#ifndef KVM_MMF
 	priv.dec_pop_timeout = 1000;
+#endif
 
 	priv.vb_vi_id = 0;
 	priv.vb_vo_id = 1;
 	priv.vb_user_id = 2;
 	priv.vb_enc_h26x_id = 3;
 	priv.vb_enc_jpeg_id = 4;
+#ifndef KVM_MMF
 	priv.vb_dec_h26x_id = 5;
 	priv.vb_dec_jpeg_id = 6;
+#endif
 
 	priv.vb_conf.u32MaxPoolCnt = 1;
 	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
@@ -244,6 +254,7 @@ static void priv_param_init(void)
 		priv.vb_enc_jpeg_id = priv.vb_enc_h26x_id;
 	}
 
+#ifndef KVM_MMF
 	g_priv.dec_h26x_enable = (priv.vb_max_pool_cnt > priv.vb_conf.u32MaxPoolCnt) ? 1 : 0;
 	if (g_priv.dec_h26x_enable) {
 		priv.vb_conf.astCommPool[priv.vb_dec_h26x_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3;
@@ -261,6 +272,7 @@ static void priv_param_init(void)
 	} else {
 		priv.vb_dec_jpeg_id = priv.vb_dec_h26x_id;
 	}
+#endif
 
 	if (priv.vb_of_vi_is_config) {
 		priv.vb_conf.astCommPool[priv.vb_vi_id].u32BlkSize = priv.vb_size_of_vi;
@@ -2981,6 +2993,7 @@ int mmf_region_frame_push(int ch, void *data, int len)
 	return s32Ret;
 }
 
+#ifndef KVM_MMF
 static int mmf_invert_codec_to_maix(PAYLOAD_TYPE_E mmf_codec) {
 	switch (mmf_codec) {
 		case PT_JPEG:
@@ -2995,6 +3008,7 @@ static int mmf_invert_codec_to_maix(PAYLOAD_TYPE_E mmf_codec) {
 			return 0xFF;
 	}
 }
+#endif
 
 static PAYLOAD_TYPE_E mmf_invert_codec_to_mmf(int maix_codec) {
 	switch (maix_codec) {
@@ -4074,6 +4088,8 @@ static int mmf_rst_venc_channel(int ch, int w, int h, int format, int quality)
 	return mmf_add_venc_channel(ch, &cfg);
 }
 
+#ifndef KVM_MMF
+
 static int _mmf_vdec_init(int ch, int format_out, VDEC_CHN_ATTR_S *chn_attr_out, SIZE_S size_in, int vb_id)
 {
 	int format_in = PIXEL_FORMAT_YUV_PLANAR_444; //PIXEL_FORMAT_YUV_PLANAR_420;
@@ -4767,6 +4783,8 @@ static int mmf_rst_vdec_channel(int ch, mmf_vdec_cfg_t *cfg, SIZE_S size_in)
 	return _mmf_add_vdec_channel(ch, format_out, &vdec_chn_attr, size_in);
 }
 
+#endif // !KVM_MMF
+
 int mmf_invert_format_to_maix(int mmf_format) {
 	switch (mmf_format) {
 		case PIXEL_FORMAT_RGB_888:
@@ -5451,6 +5469,8 @@ int mmf_add_venc_channel0(uint32_t param, ...)
 	return mmf_add_venc_channel(ch, (mmf_venc_cfg_t*)cfg);
 }
 
+#ifndef KVM_MMF
+
 int mmf_add_vdec_channel0(uint32_t param, ...)
 {
 	int method = MMF_FUNC_GET_PARAM_METHOD(param);
@@ -5512,3 +5532,5 @@ int mmf_vdec_pop0(uint32_t param, ...)
 
 	return _mmf_vdec_pop(ch, (VIDEO_FRAME_INFO_S *)frame);
 }
+
+#endif // !KVM_MMF
