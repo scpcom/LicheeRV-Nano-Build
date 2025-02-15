@@ -80,6 +80,7 @@ typedef struct {
 	SIZE_S vi_size;
 	VIDEO_FRAME_INFO_S vi_frame[MMF_VI_MAX_CHN];
 
+#ifndef KVM_MMF
 	int vo_rotate;	// 90, 180, 270
 	int vo_vpss;
 	bool vo_video_chn_is_inited[MMF_VO_VIDEO_MAX_CHN];
@@ -95,6 +96,7 @@ typedef struct {
 	int vo_video_pre_frame_height[MMF_VO_VIDEO_MAX_CHN];
 	int vo_video_pre_frame_format[MMF_VO_VIDEO_MAX_CHN];
 	SAMPLE_VO_CONFIG_S vo_video_cfg[MMF_VO_VIDEO_MAX_CHN];
+#endif
 
 	int ive_is_init;
 	IVE_HANDLE ive_handle;
@@ -180,7 +182,9 @@ static g_priv_t g_priv;
 
 static CVI_S64 _get_ion_size_info(const char *path);
 
+#ifndef KVM_MMF
 static int mmf_region_frame_push2(int ch, void *frame_info);
+#endif
 
 static int mmf_venc_deinit(int ch);
 static int _mmf_venc_push(int ch, uint8_t *data, int w, int h, int format, int quality);
@@ -200,9 +204,9 @@ static void priv_param_init(void)
 
 	priv.vi_pop_timeout = 100;
 	priv.vi_vpss = VPSS_INVALID_GRP;
+#ifndef KVM_MMF
 	priv.vo_rotate = 90;
 	priv.vo_vpss = VPSS_INVALID_GRP;
-#ifndef KVM_MMF
 	priv.dec_pop_timeout = 1000;
 #endif
 
@@ -650,6 +654,8 @@ static int cvi_ive_deinit(void)
 	return 0;
 }
 
+#ifndef KVM_MMF
+
 static int cvi_rgb2nv21(uint8_t *src, int input_w, int input_h)
 {
 	CVI_S32 s32Ret;
@@ -693,6 +699,8 @@ static int cvi_rgb2nv21(uint8_t *src, int input_w, int input_h)
 	}
 	return 0;
 }
+
+#endif // !KVM_MMF
 
 static int _try_release_sys(void)
 {
@@ -743,11 +751,13 @@ int _try_release_vio_all(void)
 		return s32Ret;
 	}
 
+#ifndef KVM_MMF
 	s32Ret = mmf_del_vo_channel_all(0);
 	if (s32Ret != CVI_SUCCESS) {
 		printf("mmf_del_vo_channel_all failed with %#x\n", s32Ret);
 		return s32Ret;
 	}
+#endif
 	return s32Ret;
 }
 
@@ -1250,7 +1260,9 @@ int mmf_deinit(void) {
 #endif
 
 		mmf_del_vi_channel_all();
+#ifndef KVM_MMF
 		mmf_del_vo_channel_all(0);
+#endif
 		mmf_del_venc_channel_all();
 		mmf_vi_deinit();
 		mmf_del_region_channel_all();
@@ -1779,6 +1791,8 @@ void mmf_vi_frame_free(int ch) {
 	if (CVI_VPSS_ReleaseChnFrame(priv.vi_vpss, ch, frame) != 0)
 			printf("CVI_VI_ReleaseChnFrame failed\n");
 }
+
+#ifndef KVM_MMF
 
 // manage vo channels
 int mmf_get_vo_unused_channel(int layer) {
@@ -2600,6 +2614,8 @@ int mmf_vo_frame_push(int layer, int ch, void *data, int len, int width, int hei
 	return mmf_vo_frame_push_with_fit(layer, ch, data, len, width, height, format, priv.vo_vpss_fit[ch]);
 }
 
+#endif // !KVM_MMF
+
 static CVI_S32 _mmf_region_attach_to_channel(CVI_S32 ch, int x, int y, RGN_TYPE_E enType, MMF_CHN_S *pstChn)
 {
 #define OverlayMinHandle 0
@@ -2921,6 +2937,8 @@ int mmf_region_update_canvas(int ch)
 	return s32Ret;
 }
 
+#ifndef KVM_MMF
+
 static int mmf_region_frame_push2(int ch, void *frame_info)
 {
 	void *data;
@@ -2949,6 +2967,8 @@ static int mmf_region_frame_push2(int ch, void *frame_info)
 
 	return mmf_region_frame_push(ch, data, len);
 }
+
+#endif // !KVM_MMF
 
 int mmf_region_frame_push(int ch, void *data, int len)
 {
@@ -5023,6 +5043,8 @@ void mmf_set_vi_vflip(int ch, bool en)
 	g_priv.vi_vflip[ch] = en;
 }
 
+#ifndef KVM_MMF
+
 void mmf_get_vo_video_hmirror(int ch, bool *en)
 {
 	if (ch < 0 || ch >= MMF_VO_VIDEO_MAX_CHN) {
@@ -5068,6 +5090,8 @@ void mmf_set_vo_video_flip(int ch, bool en)
 
 	g_priv.vo_video_vflip[ch] = en;
 }
+
+#endif // !KVM_MMF
 
 int mmf_get_constrast(int ch, uint32_t *value)
 {
@@ -5398,6 +5422,8 @@ int mmf_add_vi_channel0(uint32_t param, ...)
 	return _mmf_add_vi_channel(ch, width, height, format, fps, depth, mirror, vflip, fit);
 }
 
+#ifndef KVM_MMF
+
 int mmf_add_vo_channel0(uint32_t param, ...)
 {
 	int method = MMF_FUNC_GET_PARAM_METHOD(param);
@@ -5428,6 +5454,8 @@ int mmf_add_vo_channel0(uint32_t param, ...)
 	UNUSED(pool_num_out);
 	return  _mmf_add_vo_channel(layer, ch, width, height, format_in, format_out, fps, depth, mirror, vflip, fit);
 }
+
+#endif // !KVM_MMF
 
 int mmf_add_region_channel0(uint32_t param, ...)
 {
