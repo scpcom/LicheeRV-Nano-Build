@@ -91,6 +91,7 @@ mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maixcam_lib/
 	@cp -p maixcam_lib/release.linux/libmaixcam_lib.so $(MW_LIB)/
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C kvm_mmf/
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C kvm_vision/
 
 clean_mmflibs:
@@ -99,6 +100,7 @@ clean_mmflibs:
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C media_server-1.0.1/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maix_mmf/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C maixcam_lib/ clean
+	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C kvm_mmf/ clean
 	@$(MAKE) AR=$(AR) CC=$(CC) CXX=$(CXX) PLATFORM=linux RELEASE=1 -C kvm_vision/ clean
 
 $(COMMON_DIR)/%.o: $(COMMON_DIR)/%.c
