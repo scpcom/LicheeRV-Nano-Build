@@ -152,16 +152,16 @@ typedef struct {
 	int vb_count_of_vo;
 	int vb_size_of_private;
 	int vb_count_of_private;
-	uint8_t vb_vi_id;
+	VB_POOL vb_vi_id;
 #ifndef KVM_MMF
-	uint8_t vb_vo_id;
-	uint8_t vb_user_id;
+	VB_POOL vb_vo_id;
+	VB_POOL vb_user_id;
 #endif
-	uint8_t vb_enc_h26x_id;
-	uint8_t vb_enc_jpeg_id;
+	VB_POOL vb_enc_h26x_id;
+	VB_POOL vb_enc_jpeg_id;
 #ifndef KVM_MMF
-	uint8_t vb_dec_h26x_id;
-	uint8_t vb_dec_jpeg_id;
+	VB_POOL vb_dec_h26x_id;
+	VB_POOL vb_dec_jpeg_id;
 #endif
 	CVI_U32 vb_max_pool_cnt;
 
@@ -219,17 +219,22 @@ static void priv_param_init(void)
 	priv.vb_conf.u32MaxPoolCnt ++;
 
 #ifndef KVM_MMF
-	priv.vb_vo_id = priv.vb_conf.u32MaxPoolCnt;
-	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
-	priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkCnt = 8;
-	priv.vb_conf.astCommPool[priv.vb_vo_id].enRemapMode = VB_REMAP_MODE_CACHED;
-	priv.vb_conf.u32MaxPoolCnt ++;
+	if (ion_total_mem > 0 && ion_total_mem < 40 * 1024 * 1024) {
+		priv.vb_vo_id = VB_INVALID_POOLID;
+		priv.vb_user_id = VB_INVALID_POOLID;
+	} else {
+		priv.vb_vo_id = priv.vb_conf.u32MaxPoolCnt;
+		priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkSize = ALIGN(DISP_W, DEFAULT_ALIGN) * ALIGN(DISP_H, DEFAULT_ALIGN) * 3;
+		priv.vb_conf.astCommPool[priv.vb_vo_id].u32BlkCnt = 8;
+		priv.vb_conf.astCommPool[priv.vb_vo_id].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.u32MaxPoolCnt ++;
 
-	priv.vb_user_id = priv.vb_conf.u32MaxPoolCnt;
-	priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
-	priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkCnt = 2;
-	priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
-	priv.vb_conf.u32MaxPoolCnt ++;
+		priv.vb_user_id = priv.vb_conf.u32MaxPoolCnt;
+		priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkSize = ALIGN(2560, DEFAULT_ALIGN) * ALIGN(1440, DEFAULT_ALIGN) * 3 / 2;
+		priv.vb_conf.astCommPool[priv.vb_user_id].u32BlkCnt = 2;
+		priv.vb_conf.astCommPool[priv.vb_user_id].enRemapMode = VB_REMAP_MODE_CACHED;
+		priv.vb_conf.u32MaxPoolCnt ++;
+	}
 #endif
 
 	priv.vb_enc_h26x_id = priv.vb_conf.u32MaxPoolCnt;
@@ -239,9 +244,11 @@ static void priv_param_init(void)
 	priv.vb_dec_jpeg_id = priv.vb_conf.u32MaxPoolCnt + 3;
 #endif
 
-	printf("ion heap total size: %u KiB\n", ion_total_mem / 1024);
+	printf("ion heap total size: %llu KiB\n", ion_total_mem / 1024);
 	if (priv.vb_max_pool_cnt < priv.vb_conf.u32MaxPoolCnt) {
-		if (ion_total_mem > 0 && ion_total_mem < 64 * 1024 * 1024) {
+		if (ion_total_mem > 0 && ion_total_mem < 40 * 1024 * 1024) {
+			priv.vb_max_pool_cnt = 2;
+		} else if (ion_total_mem > 0 && ion_total_mem < 64 * 1024 * 1024) {
 			priv.vb_max_pool_cnt = 4;
 		} else {
 			priv.vb_max_pool_cnt = 7;
@@ -467,12 +474,12 @@ static int _free_leak_memory_of_ion(void)
 	return 0;
 }
 
-static CVI_S32 _mmf_init_frame(int id, SIZE_S stSize, PIXEL_FORMAT_E enPixelFormat,  VIDEO_FRAME_INFO_S *pstVideoFrame, VB_CAL_CONFIG_S *pstVbCfg)
+static CVI_S32 _mmf_init_frame(VB_POOL id, SIZE_S stSize, PIXEL_FORMAT_E enPixelFormat,  VIDEO_FRAME_INFO_S *pstVideoFrame, VB_CAL_CONFIG_S *pstVbCfg)
 {
 	VIDEO_FRAME_S *pstVFrame;
 	VB_BLK blk;
 
-	if ((CVI_U32)id >= priv.vb_conf.u32MaxPoolCnt) {
+	if (id == VB_INVALID_POOLID || (CVI_U32)id >= priv.vb_conf.u32MaxPoolCnt) {
 		printf("Invalid vb pool. id: %d\n", id);
 		return CVI_FAILURE;
 	}
