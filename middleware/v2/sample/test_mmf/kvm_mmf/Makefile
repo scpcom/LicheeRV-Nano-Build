@@ -13,7 +13,7 @@ ROOT:=$(PWD)/..
 # OUTTYPE: 0-exe, 1-dll, 2-static
 #--------------------------------------------------------------------
 OUTTYPE = 1
-OUTFILE = libkvm.so
+OUTFILE = libkvm_mmf.so
 
 #-------------------------------Include------------------------------
 #
@@ -25,7 +25,8 @@ INCLUDES = . \
 					$(ISP_INC) \
 					../../common/ \
 					$(KERNEL_INC) \
-					$(ROOT)/kvm_mmf/include
+					$(SENSOR_LIST_INC) \
+					$(ROOT)
 
 #-------------------------------Source-------------------------------
 #
@@ -42,19 +43,19 @@ SOURCE_FILES += $(foreach dir,$(SOURCE_PATHS),$(wildcard $(dir)/*.c))
 LIBPATHS =
 ifdef RELEASE
 # relase library path
-LIBPATHS += $(ROOT)/kvm_mmf/release.linux
+LIBPATHS +=
 else
 LIBPATHS +=
 endif
 
-LIBS = kvm_mmf
+LIBS = stdc++fs
 
-STATIC_LIBS =
+STATIC_LIBS = $(MW_LIB)/libsample.a $(MW_LIB)/libsns_full.a
 
 #-----------------------------DEFINES--------------------------------
 #
 # DEFINES := $(addprefix -D,$(DEFINES)) # add -L prefix
 #--------------------------------------------------------------------
-DEFINES =
+DEFINES = KVM_MMF
 
 include gcc.mk
