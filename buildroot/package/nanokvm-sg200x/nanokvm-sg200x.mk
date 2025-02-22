@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-NANOKVM_SG200X_VERSION = 2.1.5
+NANOKVM_SG200X_VERSION = 2.2.1
 NANOKVM_SG200X_BASE = nanokvm-skeleton-$(NANOKVM_SG200X_VERSION)
 NANOKVM_SG200X_SOURCE = v$(NANOKVM_SG200X_VERSION).zip
 NANOKVM_SG200X_SITE = https://github.com/scpcom/nanokvm-skeleton/archive/refs/tags
@@ -14,6 +14,7 @@ NANOKVM_SG200X_DEPENDENCIES += nanokvm-server
 NANOKVM_SG200X_EXT_MIDDLEWARE = $(realpath $(TOPDIR)/../middleware/v2)
 NANOKVM_SG200X_EXT_KVM_SYSTEM = sample/kvm_system/kvm_system
 NANOKVM_SG200X_EXT_KVM_STREAM = sample/kvm_stream/kvm_stream
+NANOKVM_SG200X_EXT_KVM_MMF = sample/test_mmf/kvm_mmf/release.linux/libkvm_mmf.so
 NANOKVM_SG200X_EXT_KVM_VISION = sample/test_mmf/kvm_vision/release.linux/libkvm.so
 NANOKVM_SG200X_EXT_MAIXCAM_LIB = sample/test_mmf/maixcam_lib/release.linux/libmaixcam_lib.so
 NANOKVM_SG200X_EXT_OVERLAY = $(BR2_ROOTFS_OVERLAY)
@@ -95,7 +96,13 @@ define NANOKVM_SG200X_INSTALL_TARGET_CMDS
 		rsync -r --verbose --copy-dirlinks --copy-links --hard-links $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_SYSTEM) $(TARGET_DIR)/kvmapp/kvm_system/ ; \
 	fi
 	mkdir -pv $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/
-	if [ -e $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_MAIXCAM_LIB) ]; then \
+	if [ -e $(TARGET_DIR)/kvmapp/server/dl_lib/libkvm_mmf.so -a -e ${@D}/.maixcdk_kvm_system ]; then \
+		touch ${@D}/.maixcdk_kvm_mmf ; \
+	elif [ -e $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_MMF) ]; then \
+		rm -f ${@D}/.maixcdk_kvm_mmf ; \
+		rsync -r --verbose --copy-dirlinks --copy-links --hard-links $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_MMF) $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
+	elif [ -e $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_MAIXCAM_LIB) ]; then \
+		rm -f ${@D}/.maixcdk_kvm_mmf ; \
 		rsync -r --verbose --copy-dirlinks --copy-links --hard-links $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_MAIXCAM_LIB) $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ ; \
 	fi
 	for l in $(NANOKVM_SG200X_REQUIRED_LIBS) ; do \
@@ -149,7 +156,8 @@ define NANOKVM_SG200X_INSTALL_TARGET_CMDS
 		rsync -avpPxH $(TARGET_DIR)/kvmapp/kvm_system/dl_lib/ $(TARGET_DIR)/kvmapp/kvm_stream/dl_lib/ ; \
 	fi
 	if [ -e $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_VISION) -a \
-	     -e $(TARGET_DIR)/kvmapp/server/dl_lib/libkvm.so ]; then \
+	     -e $(TARGET_DIR)/kvmapp/server/dl_lib/libkvm.so -a \
+	   ! -e ${@D}/.maixcdk_kvm_mmf ]; then \
 		rsync -r --verbose --copy-dirlinks --copy-links --hard-links $(NANOKVM_SG200X_EXT_MIDDLEWARE)/$(NANOKVM_SG200X_EXT_KVM_VISION) $(TARGET_DIR)/kvmapp/server/dl_lib/ ; \
 		chmod ugo+rx $(TARGET_DIR)/kvmapp/server/dl_lib/libkvm.so ; \
 	fi
