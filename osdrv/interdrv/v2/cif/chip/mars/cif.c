@@ -35,6 +35,15 @@
 #include <base_cb.h>
 #include <cif_cb.h>
 
+#include <linux/init.h>
+#include <linux/gpio.h>
+#include <linux/input.h>
+#include <linux/uaccess.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+
+#define PROC_FILE_NAME "lt_int"
+
 #define MIPI_IF
 #define DVP_IF
 #define BT601_IF
@@ -55,6 +64,46 @@
 #define MIPI_RX_DEV_NAME "cvi-mipi-rx"
 #define MAX_CIF_PROC_BUF 32
 
+static int data = 0;
+static int lt_int = 0;
+
+static int my_proc_show(struct seq_file *m, void *v) {
+    seq_printf(m, "%d\n", data);
+    return 0;
+}
+
+static int my_proc_open(struct inode *inode, struct file *file) {
+    return single_open(file, my_proc_show, NULL);
+}
+
+static ssize_t my_proc_write(struct file *file, const char __user *buf, size_t count, loff_t *f_pos) {
+    char kbuf[16];
+    int value;
+
+    if (count > sizeof(kbuf) - 1) {
+        return -EINVAL;
+    }
+
+    if (copy_from_user(kbuf, buf, count)) {
+        return -EFAULT;
+    }
+
+    kbuf[count] = '\0';
+    if (sscanf(kbuf, "%d", &value) != 1) {
+        return -EINVAL;
+    }
+
+    data = value;
+    return count;
+}
+static const struct proc_ops my_proc_fops = {
+	.proc_open		= my_proc_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release	= single_release,
+	.proc_write		= my_proc_write,
+};
+
 enum {
 	LANE_SKEW_CROSS_CLK,
 	LANE_SKEW_CROSS_DATA_NEAR,
@@ -63,6 +112,28 @@ enum {
 	LANE_SKEW_DATA,
 	LANE_SKEW_NUM,
 };
+
+struct btn_resource {
+    int gpio;
+    char *name;
+    int code;
+};
+static struct btn_resource btn_info = {
+	.gpio = 353,
+	.name = "LT-INT",
+	.code = 1,
+};
+
+static irqreturn_t button_isr(int irq, void *dev)
+{
+	printk("LT6911--:-- INT!!##\n");
+	if(gpio_get_value(btn_info.gpio) == 0){
+		data += 10;
+	} else {
+		data += 1;
+	}
+	return IRQ_HANDLED; //执行成功
+}
 
 static int mclk0 = CAMPLL_FREQ_NONE;
 module_param(mclk0, int, 0644);
@@ -83,6 +154,9 @@ MODULE_PARM_DESC(bypass_mac_clk, "byass mac clk");
 static unsigned int max_mac_clk = 594;
 module_param(max_mac_clk, uint, 0644);
 MODULE_PARM_DESC(max_mac_clk, "max mac clk");
+
+module_param(lt_int, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(lt_int, "lt_int gpio");
 
 static int cif_set_output_clk_edge(struct cvi_cif_dev *dev,
 				   struct clk_edge_s *clk_edge);
@@ -2768,6 +2842,7 @@ static char irq_name[MAX_LINK_NUM][20] = {
 
 static int _init_resource(struct platform_device *pdev)
 {
+	int lt_irq;
 #if (DEVICE_FROM_DTS)
 	struct resource *res = NULL;
 	void *reg_base[6];
@@ -2860,13 +2935,37 @@ static int _init_resource(struct platform_device *pdev)
 		link->cif_ctx.mac_num = i;
 	}
 
+	if (lt_int) {
+		proc_create(PROC_FILE_NAME, 0666, NULL, &my_proc_fops);
+		// LT6911 GPIO5 INT
+
+		// 1.申请GPIO资源
+		// 2.申请中断资源,注册中断处理函数
+		// 由GPIO编号求中断号
+		lt_irq = gpio_to_irq(btn_info.gpio);
+		gpio_request(	btn_info.gpio,
+				btn_info.name);
+		request_irq	(	lt_irq,  		//中断号
+					button_isr,		//注册的中断处理函数
+					IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+					btn_info.name,	//中断名称
+					&btn_info 		//将每个按键对应的硬件信息传递给中断处理函数
+				);
+	}
+
 	/* reset pin */
 	for (i = 0; i < MAX_LINK_NUM; ++i) {
 		link = &dev->link[i];
 		link->dev = &pdev->dev;
 		link->mac_clk = RX_MAC_CLK_400M;
-		link->snsr_rst_pin = of_get_named_gpio_flags(pdev->dev.of_node,
-				"snsr-reset", i, &link->snsr_rst_pol);
+		if(!lt_int)
+			link->snsr_rst_pin = of_get_named_gpio_flags(pdev->dev.of_node,
+					"snsr-reset", i, &link->snsr_rst_pol);
+		else if(i == 0)
+			link->snsr_rst_pin = 361;
+		else
+			link->snsr_rst_pin = -2;
+		// dev_info(&pdev->dev, "snsr_rst_pin%d\n", link->snsr_rst_pin);
 		if (link->snsr_rst_pin < 0)
 			break;
 
@@ -3353,10 +3452,18 @@ static int __init cvi_cif_init(void)
 
 static void __exit cvi_cif_exit(void)
 {
+	int lt_irq;
 	platform_driver_unregister(&cvi_cif_pdrv);
 #if (!DEVICE_FROM_DTS)
 	platform_device_unregister(&cvi_cif_pdev);
 #endif
+	if (lt_int) {
+		lt_irq = gpio_to_irq(btn_info.gpio);
+		gpio_free(btn_info.gpio);
+		free_irq(lt_irq, &btn_info);
+
+		remove_proc_entry(PROC_FILE_NAME, NULL);
+	}
 }
 
 MODULE_DESCRIPTION("Cvitek Camera Interface Driver");
