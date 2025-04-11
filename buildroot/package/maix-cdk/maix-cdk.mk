@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-MAIX_CDK_VERSION = b012b661c639a437e34d193947ac8cdbfc16b16f
+MAIX_CDK_VERSION = da86eddb2c9551faa0cfd248447c53072e35555e
 MAIX_CDK_SITE = $(call github,sipeed,MaixCDK,$(MAIX_CDK_VERSION))
 
 MAIX_CDK_SAMPLE = rtsp_demo
@@ -24,10 +24,18 @@ MAIX_CDK_DEPENDENCIES +=\
 	opencv4
 endif
 
+ifeq ($(BR2_TOOLCHAIN_BUILDROOT),y)
+MAIX_CDK_TOOLCHAIN_BIN := $(HOST_DIR)/bin
+MAIX_CDK_TOOLCHAIN_PREFIX := $(BR2_ARCH)-buildroot-linux-gnu
+else
+MAIX_CDK_TOOLCHAIN_BIN := $(TOOLCHAIN_EXTERNAL_BIN)
+MAIX_CDK_TOOLCHAIN_PREFIX := $(TOOLCHAIN_EXTERNAL_PREFIX)
+endif
+
 # maixcam pre-built binaries are only for riscv64
 # MaixCDK searches for "musl" or "glibc" in toolchain path
 MAIX_CDK_TOOLCHAIN_ARCH := $(BR2_ARCH)
-MAIX_CDK_TOOLCHAIN_LIBC := $(findstring musl,$(realpath $(TOOLCHAIN_EXTERNAL_BIN)))
+MAIX_CDK_TOOLCHAIN_LIBC := $(findstring musl,$(realpath $(MAIX_CDK_TOOLCHAIN_BIN)))
 
 MAIX_CDK_HARFBUZZ_VER = 8.2.1
 MAIX_CDK_OPENCV_VER = 4.9.0
@@ -68,6 +76,10 @@ define MAIX_CDK_POST_EXTRACT_FIXUP
 	if [ ! -e $(@D)/$(MAIX_CDK_MIDDLEWARE)/v2/lib/3rd/libcli.so ]; then \
 		sed -i /'$${mmf_lib_dir}.3rd.libcli.so'/d $(@D)/components/3rd_party/sophgo-middleware/CMakeLists.txt ; \
 		sed -i /'$${mmf_lib_dir}.3rd.libcli.so'/d $(@D)/components/maixcam_lib/CMakeLists.txt ; \
+	fi
+	if [ ! -e $(@D)/$(MAIX_CDK_MIDDLEWARE)/v2/lib/libjson-c.so.5 ]; then \
+		sed -i /'$${mmf_lib_dir}.libjson-c.so.5'/d $(@D)/components/3rd_party/sophgo-middleware/CMakeLists.txt ; \
+		sed -i /'$${mmf_lib_dir}.libjson-c.so.5'/d $(@D)/components/maixcam_lib/CMakeLists.txt ; \
 	fi
 	if [ -e $(@D)/$(MAIX_CDK_MIDDLEWARE)/v2/lib/libcvi_dnvqe.so -a ! -e $(@D)/$(MAIX_CDK_MIDDLEWARE)/v2/lib/libdnvqe.so ]; then \
 		sed -i s/'libdnvqe.so'/'libcvi_dnvqe.so'/g $(@D)/components/3rd_party/sophgo-middleware/CMakeLists.txt ; \
@@ -130,13 +142,15 @@ define MAIX_CDK_BUILD_CMDS
 	sed -i s/'^    sha256sum: .*'/'    sha256sum:'/g $(@D)/platforms/maixcam.yaml
 	sed -i s/'^    filename: .*'/'    filename:'/g $(@D)/platforms/maixcam.yaml
 	sed -i s/'^    path: .*'/'    path:'/g $(@D)/platforms/maixcam.yaml
-	sed -i 's|^    bin_path: .*|    bin_path: '$(realpath $(TOOLCHAIN_EXTERNAL_BIN))'|g' $(@D)/platforms/maixcam.yaml ; \
-	sed -i "s|^    prefix: .*|    prefix: $(TOOLCHAIN_EXTERNAL_PREFIX)-|g" $(@D)/platforms/maixcam.yaml
+	sed -i 's|^    bin_path: .*|    bin_path: '$(realpath $(MAIX_CDK_TOOLCHAIN_BIN))'|g' $(@D)/platforms/maixcam.yaml ; \
+	sed -i 's|^    prefix: .*|    prefix: '$(MAIX_CDK_TOOLCHAIN_PREFIX)'-|g' $(@D)/platforms/maixcam.yaml
 	sed -i "s|^    c_flags: .*|    c_flags: $(TARGET_LDFLAGS)|g" $(@D)/platforms/maixcam.yaml
 	sed -i "s|^    cxx_flags: .*|    cxx_flags: $(TARGET_LDFLAGS)|g" $(@D)/platforms/maixcam.yaml
 	sed -i 's|COMMAND python |COMMAND '$(HOST_DIR)/bin/python3' |g' $(@D)/tools/cmake/*.cmake
 	sed -i 's|COMMAND python3 |COMMAND '$(HOST_DIR)/bin/python3' |g' $(@D)/tools/cmake/*.cmake
 	sed -i 's|set.$${python} python3 |set($${python} '$(HOST_DIR)/bin/python3' |g' $(@D)/tools/cmake/*.cmake
+	[ "X$(BR2_TOOLCHAIN_BUILDROOT)" != "Xy" ] || sed -i /'^    $${strip_cmd}'/d $(@D)/tools/cmake/gen_binary.cmake
+	rm -rf $(@D)/components/3rd_party/ax620e_msp/
 	cd $(@D)/ ; \
 	$(HOST_DIR)/bin/python3 -m pip install -r requirements.txt
 	if [ "X$(BR2_PACKAGE_MAIX_CDK_ALL_DEPENDENCIES)" = "Xy" ]; then \
